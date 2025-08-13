@@ -25,11 +25,20 @@ It can be used in two ways:
 
 Depending what input data you have, a few modes are available:
 
-- **external** – all required rasters must be present in `data/rasters`. Missing files will cause the run to fail.  
-- **hybrid** – preferred mode. Uses provided rasters where available, computes missing ones from DEM/landuse and catchment. Can resort to scalar values (defaults) where possible  
-- **user_dtm** – all DTM-based covariates (slope, aspect, LS, etc.) must be provided; WaTEM factors can be from rasters or defaults.  
-- **user_watem** – all WaTEM factors (K, C, P, ktc, etc.) must be provided; DTM covariates will be computed.  
-- **internal** – ignores external rasters, computes everything internally from DEM and default constants.
+| Mode          | WaTEM covariates (K, C, P, ktc, etc.)     | DTM covariates (slope, aspect, LS, flow dir, etc.)             |
+|---------------|------------------------------------------|----------------------------------------------------------------|
+| **external**  | Must exist as files; error if any missing | Must exist as files; error if any missing                      |
+| **hybrid**    | Use external files if present; compute if possible; fall back to scalars (default values) if not | Use external files if present; compute if missing              |
+| **user_dtm**  | Compute/fallback to scalars if missing    | Must exist as files; error if any missing                      |
+| **user_watem**| Must exist as files; error if any missing | Compute if missing                                             |
+| **internal**  | Compute all from available base data      | Compute all from available base data                           |
+
+**Possible input configuration examples:**  
+- Only DTM, catchment mask, and landuse — use `hybrid`.
+- DTM, catchment mask, landuse, Kfactor and river vector/raster — use `internal`.  
+- DTM and Precomputed slope/aspect/LS but no WaTEM rasters — use `user_dtm`.  
+- DTM and Precomputed WaTEM rasters but no slope/aspect/LS — use `user_watem`.  
+- Complete set of DTM-related and WaTEM rasters — use `external`.  
 
 None of these change the core model logic—just how data is supplied.
 
