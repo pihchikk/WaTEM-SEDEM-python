@@ -1,7 +1,7 @@
 {
   "$comment": "WaTEM-SEDEM descriptor with brief human comments via $comment keys.",
   "model_identification": {
-    "$comment": "Who/what the model is; short catalog-ready metadata.",
+    "$comment": "What the model is; short model metadata.",
     "full_name": "WaTEM-SEDEM",
     "short_name": "WaTEM",
     "authors": ["Danila Bardashov bardashov_dr@esoil.ru"],
@@ -96,8 +96,11 @@
   },
 
   "execution_parameters": {
-    "$comment": "Scenarios, logging, time/space semantics, and unit policy for runtime.",
+    "$comment": "Scenarios, modes, logging, time and space semantics, and unit policy for runtime.",
     "scenarios": [
+    { "name": "default", "description": "Annual steady-state erosion/deposition calculation for a given catchment." }
+    ],
+    "input_modes": [
       { "name": "external",   "description": "Require all WaTEM and DTM rasters; error if missing." },
       { "name": "hybrid",     "description": "Prefer externals; compute missing DTM; WaTEM fall back to defaults if absent." },
       { "name": "user_dtm",   "description": "Require external DTM covariates; WaTEM from files or defaults." },
@@ -108,14 +111,14 @@
     "checkpoints": false,
     "logging": { "format": "text", "level": "INFO" },
     "time": {
-      "$comment": "Model is steady annual; one step in ‘year’ units.",
+      "$comment": "Model is steady annual; one step corresponds to 1 year.",
       "time_step": 1.0,
       "time_units": "year",
       "simulation_period": "single 1-year step (steady annual budget)"
     },
     "space": {
       "$comment": "Domain geometry and resolution; derived from DEM/mask.",
-      "cell_size": "from config (e.g., 10–30 m)",
+      "cell_size": "from DEM/mask/config (e.g., 10–30 m)",
       "crs": "projected CRS in metres (e.g., UTM EPSG:326xx/327xx)",
       "extent": "defined by DEM/catchment mask"
     },
@@ -484,16 +487,16 @@
     "lag": { "value": 0, "units": "s" }
   },
   "test_dataset": {
-    "$comment": "Reference datasets for CI smoke tests and validation; one per scenario.",
+    "$comment": "Reference datasets for CI smoke tests and validation; one per mode.",
     "input_files": "data/**/*",
     "reference_sets": [
-        { "scenario": "external",   "path": "tests/tests_external/**/*" },
-        { "scenario": "hybrid",     "path": "tests/tests_hybrid/**/*" },
-        { "scenario": "user_dtm",   "path": "tests/tests_user_dtm/**/*" },
-        { "scenario": "user_watem", "path": "tests/tests_user_watem/**/*" },
-        { "scenario": "internal",   "path": "tests/tests_internal/**/*" }
+        { "mode": "external",   "path": "tests/tests_external/**/*" },
+        { "mode": "hybrid",     "path": "tests/tests_hybrid/**/*" },
+        { "mode": "user_dtm",   "path": "tests/tests_user_dtm/**/*" },
+        { "mode": "user_watem", "path": "tests/tests_user_watem/**/*" },
+        { "mode": "internal",   "path": "tests/tests_internal/**/*" }
     ],
-    "default_scenario": "hybrid",
+    "default_mode": "hybrid",
     "seed": null,
     "description": "Small catchment example with known outputs for static validation"
     },
