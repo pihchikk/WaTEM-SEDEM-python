@@ -1,0 +1,520 @@
+{
+  "$comment": "WaTEM-SEDEM descriptor with brief human comments via $comment keys.",
+  "model_identification": {
+    "$comment": "Who/what the model is; short catalog-ready metadata.",
+    "full_name": "WaTEM-SEDEM",
+    "short_name": "WaTEM",
+    "authors": ["Danila Bardashov bardashov_dr@esoil.ru"],
+    "version": "1.0",
+    "last_update": "2025-08-12",
+    "model_type": [
+      "deterministic",
+      "empirical",
+      "spatially-distributed",
+      "simulation",
+      "static"
+    ],
+    "description": "Soil erosion and sediment transport model allowing both the use of external files and inner DEM/WaTEM-SEDEM inputs computations. Based on pywatemsedem"
+  },
+
+  "policy": {
+    "$comment": "unit system, standard-name catalog, nodata and calendar conventions.",
+    "units": "UDUNITS",
+    "standard_names": "CSDMS",
+    "nodata": { "float": "NaN", "int": -1 },
+    "conventions": { "calendar": "proleptic_gregorian", "time_utc": true }
+  },
+
+  "bmi": {
+    "$comment": "BMI metadata so generic runners/couplers can initialize and query.",
+    "component_name": "WaTEM-SEDEM",
+    "model_class": "BmiWaTEM",
+    "grid": { "type": "uniform_rectilinear", "rank": 2 },
+    "input_vars": [
+      "elevation","slope","aspect","flow_accumulation","slope_length",
+      "flow_direction","LS-factor","Kfactor","Cfactor","Pfactor",
+      "ktc","Rfactor","bulk-density"
+    ],
+    "output_vars": ["SEDI_OUT","CAPACITY","WATEREROS"],
+    "time": { "start_time": 0.0, "end_time": 1.0, "time_step": 1.0, "time_units": "year" }
+  },
+
+  "model_access": {
+    "$comment": "Repo layout + quickstart for CLI/BMI consumption.",
+    "repository_structure": {
+      "$comment": "Name the important entry points so external tools can find them.",
+      "root": [
+        "config.yaml",
+        "data_loader.py",
+        "compute_dtm.py",
+        "preprocess_watem.py",
+        "lateraldistribution.py",
+        "raster_calculations.py",
+        "run_watem.py",
+        "bmi_watem.py"
+      ],
+      "scripts": "compute_dtm.py, preprocess_watem.py, run_watem.py",
+      "modules": "data_loader.py, lateraldistribution.py, raster_calculations.py"
+    },
+    "repository_link": "https://github.com/yourorg/Watem-SEDEM",
+    "cli_usage": {
+      "$comment": "Ready-to-copy install and minimal run examples.",
+      "installation": [
+        "git clone https://github.com/yourorg/Watem-SEDEM.git",
+        "cd Watem-SEDEM",
+        "pip install -r requirements.txt"
+      ],
+      "examples": [
+        "python run_watem.py -c config.yaml --mode hybrid",
+        "python run_watem.py -c config.yaml --save-rasters --save-plots"
+      ],
+      "bmi_snippet": "from bmi_watem import BmiWaTEM; m=BmiWaTEM(); m.initialize('config.yaml'); m.update(); sed=m.get_value_ptr('SEDI_OUT')"
+    }
+  },
+
+  "runtime_environment": {
+    "$comment": "What the runtime expects: OS, language, deps, external tools, hardware.",
+    "operating_system": ["Linux", "macOS", "Windows"],
+    "language": "Python >=3.9",
+    "dependencies": [
+      "numpy",
+      "PyYAML",
+      "pydantic>=2",
+      "rasterio",
+      "affine",
+      "matplotlib",
+      "bmipy",
+      "geopandas",
+      "fiona",
+      "shapely>=2.0",
+      "pyproj",
+      "pywatemsedem",
+      "richdem"
+    ],
+    "external_tools": ["SAGA GIS (saga_cmd) for optional DTM derivations"],
+    "hardware_requirements": { "RAM": "dataset dependent", "CPU": "any modern CPU" }
+  },
+
+  "execution_parameters": {
+    "$comment": "Scenarios, logging, time/space semantics, and unit policy for runtime.",
+    "scenarios": [
+      { "name": "external",   "description": "Require all WaTEM and DTM rasters; error if missing." },
+      { "name": "hybrid",     "description": "Prefer externals; compute missing DTM; WaTEM fall back to defaults if absent." },
+      { "name": "user_dtm",   "description": "Require external DTM covariates; WaTEM from files or defaults." },
+      { "name": "user_watem", "description": "Require external WaTEM covariates; compute missing DTM." },
+      { "name": "internal",   "description": "Force run internal computations and load its outputs." }
+    ],
+    "config_file_type": "YAML",
+    "checkpoints": false,
+    "logging": { "format": "text", "level": "INFO" },
+    "time": {
+      "$comment": "Model is steady annual; one step in ‘year’ units.",
+      "time_step": 1.0,
+      "time_units": "year",
+      "simulation_period": "single 1-year step (steady annual budget)"
+    },
+    "space": {
+      "$comment": "Domain geometry and resolution; derived from DEM/mask.",
+      "cell_size": "from config (e.g., 10–30 m)",
+      "crs": "projected CRS in metres (e.g., UTM EPSG:326xx/327xx)",
+      "extent": "defined by DEM/catchment mask"
+    },
+    "units": {
+      "$comment": "Default runtime unit choice (BMI will expose these labels).",
+      "SEDI_OUT": "kg cell-1",
+      "CAPACITY": "kg cell-1",
+      "WATEREROS": "kg cell-1"
+    },
+    "allowed_units": {
+      "$comment": "Permitted alternatives for conversions driven by YAML settings.",
+      "SEDI_OUT": ["m3 cell-1", "kg cell-1", "t ha-1"],
+      "CAPACITY":  ["m3 cell-1", "kg cell-1", "t ha-1"],
+      "WATEREROS": ["m", "mm", "kg cell-1", "t ha-1"]
+    },
+    "density_source": "yaml: defaults.bulk-density",
+    "cell_size_source": "raster: DEM pixel size"
+  },
+
+  "grids": [
+    {
+      "$comment": "Single 2D uniform raster grid; origin/spacing follow DEM.",
+      "id": 0,
+      "type": "uniform_rectilinear",
+      "rank": 2,
+      "shape": ["${n_rows}", "${n_cols}"],
+      "spacing": ["${dy_m}", "${dx_m}"],
+      "origin": ["${y0_m}", "${x0_m}"],
+      "crs": { "epsg": "${epsg}", "wkt": null },
+      "vertical": { "layers": null, "z_positive": "up", "sigma_coords": false }
+    }
+  ],
+
+  "variables": {
+    "$comment": "BMI variables with standard names and (possibly) dynamic units.",
+    "elevation": {
+      "intent": "in",
+      "grid": 0,
+      "location": "node",
+      "dtype": "float32",
+      "units": "m",
+      "standard_name": "land_surface__elevation",
+      "time_dependence": "static",
+      "attributes": { "long_name": "Digital elevation model" }
+    },
+    "flow_direction": {
+      "intent": "in",
+      "grid": 0,
+      "location": "node",
+      "dtype": "int16",
+      "units": "1",
+      "standard_name": "flow__direction_d8",
+      "attributes": { "codes": "0–7, -1=no-flow" }
+    },
+    "SEDI_OUT": {
+      "$comment": "Runtime unit taken from YAML (output.sediment_unit).",
+      "intent": "out",
+      "grid": 0,
+      "location": "node",
+      "dtype": "float32",
+      "units": "dynamic",
+      "units_source": "yaml: output.sediment_unit",
+      "runtime_units": ["m3 cell-1", "kg cell-1", "t ha-1"],
+      "standard_name": "land_surface_sediment__export_volume",
+      "time_dependence": "steady"
+    },
+    "CAPACITY": {
+      "$comment": "Transport capacity; same unit policy as SEDI_OUT.",
+      "intent": "out",
+      "grid": 0,
+      "location": "node",
+      "dtype": "float32",
+      "units": "dynamic",
+      "units_source": "yaml: output.sediment_unit",
+      "runtime_units": ["m3 cell-1", "kg cell-1", "t ha-1"],
+      "standard_name": "channel_sediment__transport_capacity_volume",
+      "time_dependence": "steady"
+    },
+    "WATEREROS": {
+      "$comment": "Thickness or mass/area per YAML (output.erosion_unit).",
+      "intent": "out",
+      "grid": 0,
+      "location": "node",
+      "dtype": "float32",
+      "units": "dynamic",
+      "units_source": "yaml: output.erosion_unit",
+      "runtime_units": ["m", "mm", "kg cell-1", "t ha-1"],
+      "standard_name": "land_surface__erosion_deposition_thickness",
+      "time_dependence": "steady"
+    }
+  },
+
+  "input_parameters": {
+    "$comment": "External inputs consumable by loader; rasters or scalars.",
+    "items": [
+      {
+        "name": "elevation",
+        "abbr": "DEM",
+        "description": "Digital elevation model",
+        "units": "m",
+        "file_format": "tif",
+        "data_type": "float32",
+        "required": true,
+        "standard_name": "land_surface__elevation"
+      },
+      {
+        "name": "slope",
+        "abbr": "slope",
+        "description": "Terrain slope",
+        "units": "radian",
+        "file_format": "tif",
+        "data_type": "float32",
+        "required": false,
+        "standard_name": "relief_slope"
+      },
+      {
+        "name": "aspect",
+        "abbr": "aspect",
+        "description": "Terrain aspect",
+        "units": "radian",
+        "file_format": "tif",
+        "data_type": "float32",
+        "required": false,
+        "standard_name": "relief_aspect"
+      },
+      {
+        "name": "flow_accumulation",
+        "abbr": "FA",
+        "description": "Upslope contributing area m2 (SAGA) or cell count",
+        "units": "m2",
+        "file_format": "tif",
+        "data_type": "float32",
+        "required": false,
+        "standard_name": "relief_flow-accumulation"
+      },
+      {
+        "name": "slope_length",
+        "abbr": "SL",
+        "description": "Slope length",
+        "units": "m",
+        "file_format": "tif",
+        "data_type": "float32",
+        "required": false,
+        "standard_name": "topographic__slope_length"
+      },
+      {
+        "name": "flow_direction",
+        "abbr": "FD",
+        "description": "D8 codes (0–7; -1 nodata/no-flow)",
+        "units": "1",
+        "file_format": "tif",
+        "data_type": "int16",
+        "required": false,
+        "standard_name": "flow__direction_d8"
+      },
+      {
+        "name": "LS-factor",
+        "abbr": "LS",
+        "description": "RUSLE L×S factor",
+        "units": "1",
+        "file_format": "tif",
+        "data_type": "float32",
+        "required": false,
+        "standard_name": "relief_index~ls-factor"
+      },
+      {
+        "name": "Kfactor",
+        "abbr": "K",
+        "description": "Soil erodibility",
+        "units": "kg h MJ^-1 mm^-1",
+        "file_format": "tif or scalar",
+        "data_type": "float32",
+        "required": false,
+        "default": 70.0,
+        "standard_name": "relief_k-factor"
+      },
+      {
+        "name": "Cfactor",
+        "abbr": "C",
+        "description": "Cover-management factor",
+        "units": "1",
+        "file_format": "tif or scalar",
+        "data_type": "float32",
+        "required": false,
+        "default": 0.37,
+        "standard_name": "relief_c-factor"
+      },
+      {
+        "name": "Pfactor",
+        "abbr": "P",
+        "description": "Support-practice factor",
+        "units": "1",
+        "file_format": "tif or scalar",
+        "data_type": "float32",
+        "required": false,
+        "default": 1.0,
+        "standard_name": "support_practice__erosion_factor"
+      },
+      {
+        "name": "ktc",
+        "abbr": "KTC",
+        "description": "Transport-capacity coefficient (scaled by calibration.multiplier)",
+        "units": "1",
+        "file_format": "tif or scalar",
+        "data_type": "float32",
+        "required": false,
+        "default": 1.0,
+        "standard_name": "sediment_transport__capacity_coefficient"
+      },
+      {
+        "name": "Rfactor",
+        "abbr": "R",
+        "description": "Rainfall erosivity",
+        "units": "MJ mm ha^-1 h^-1 yr^-1",
+        "file_format": "scalar or tif",
+        "data_type": "float32",
+        "required": false,
+        "default": 350.0,
+        "standard_name": "relief_r-factor"
+      },
+      {
+        "name": "bulk-density",
+        "abbr": "BD",
+        "description": "Soil bulk density",
+        "units": "kg m-3",
+        "file_format": "scalar or tif",
+        "data_type": "float32",
+        "required": false,
+        "default": 1300.0,
+        "standard_name": "soil_density_bulk"
+      },
+      {
+        "name": "routing",
+        "abbr": "routing",
+        "description": "Optional routing codes",
+        "units": "1",
+        "file_format": "tif",
+        "data_type": "int16",
+        "required": false,
+        "standard_name": "network__routing_code"
+      },
+      {
+        "name": "segments",
+        "abbr": "segments",
+        "description": "Optional segment ID per cell",
+        "units": "1",
+        "file_format": "tif",
+        "data_type": "int16",
+        "required": false,
+        "standard_name": "network_channel__segment_id"
+      },
+      {
+        "name": "outlet",
+        "abbr": "outlet",
+        "description": "Optional outlet mask or segment ID",
+        "units": "1",
+        "file_format": "tif",
+        "data_type": "int16",
+        "required": false,
+        "standard_name": "network_channel__outlet_id"
+      }
+    ]
+  },
+
+  "output_parameters": {
+    "$comment": "What files/arrays the model writes; units may be dynamic.",
+    "items": [
+      {
+        "name": "SEDI_OUT",
+        "abbr": "SedimentExport",
+        "description": "Net sediment export per cell",
+        "units": "dynamic",
+        "units_source": "yaml: output.sediment_unit",
+        "runtime_units": ["m3", "kg", "t ha-1"],
+        "file_format": "tif",
+        "data_type": "float32",
+        "standard_name": "land_surface_sediment__export_volume"
+      },
+      {
+        "name": "CAPACITY",
+        "abbr": "TransportCapacity",
+        "description": "Sediment transport capacity per cell",
+        "units": "dynamic",
+        "units_source": "yaml: output.sediment_unit",
+        "runtime_units": ["m3", "kg", "t ha-1"],
+        "file_format": "tif",
+        "data_type": "float32",
+        "standard_name": "channel_sediment__transport_capacity_volume"
+      },
+      {
+        "name": "WATEREROS",
+        "abbr": "WaterErosion",
+        "description": "Erosion (+) / deposition (−) as thickness or mass-per-area",
+        "units": "dynamic",
+        "units_source": "yaml: output.erosion_unit",
+        "runtime_units": ["m", "mm", "kg", "t ha-1"],
+        "file_format": "tif",
+        "data_type": "float32",
+        "standard_name": "land_surface__erosion_deposition_thickness"
+      }
+    ]
+  },
+
+  "time_control": {
+    "$comment": "Bookkeeping window + one-step dt for steady annual budget.",
+    "start": "2025-01-01T00:00:00Z",
+    "end": "2025-12-31T23:59:59Z",
+    "dt": { "type": "fixed", "value": 31536000.0, "units": "s" },
+    "spinup": { "enabled": false, "period": 0, "units": "s" },
+    "restart": { "read": null, "write_interval_steps": 1 }
+  },
+
+  "conditions": {
+    "$comment": "IC/BC/forcing hooks (mostly empty for this static annual run).",
+    "initial_conditions": [],
+    "boundary_conditions": [],
+    "forcing": []
+  },
+
+  "numerics": {
+    "$comment": "Algorithmic choices; placeholders retained for portability.",
+    "schemes": { "advection": "upwind", "time_integration": "forward_euler" },
+    "tolerances": { "abs": null, "rel": null },
+    "cfl_max": null,
+    "max_iters": 1,
+    "stabilization": {}
+  },
+
+  "stochastic": {
+    "$comment": "Turn on if you sample parameters / run ensembles.",
+    "enabled": false,
+    "rng": "PCG64",
+    "seed": 42,
+    "ensemble": { "size": 1, "member_id": 0, "design": "single" }
+  },
+
+  "performance": {
+    "$comment": "Parallelism/precision knobs; conservative defaults.",
+    "mpi": { "enabled": false, "ranks": 1, "decomp": null },
+    "threads": 1,
+    "gpu": { "enabled": false, "backend": null },
+    "tiling": { "block_yx": [256, 256] },
+    "precision": "fp32"
+  },
+
+  "io": {
+    "$comment": "Search paths, output formats, and logging/checkpoint policy.",
+    "input_search_paths": ["./data/rasters", "./pywatemsedem_preprocessed_rasters"],
+    "output": {
+      "directory": "./results",
+      "frequency": { "value": 1, "units": "step" },
+      "formats": ["GeoTIFF"],
+      "compression": {},
+      "chunking": { "x": 512, "y": 512, "t": 1 },
+      "naming": { "template": "{var}.tif" }
+    },
+    "checkpoints": { "enabled": false, "interval_steps": 1, "path": "./chk" },
+    "logs": { "level": "INFO", "file": "./results/run.log" }
+  },
+
+  "coupling": {
+    "$comment": "How/when to exchange vars if part of a coupled system.",
+    "framework": "BMI",
+    "exchange_vars": [],
+    "interval": { "value": 31536000, "units": "s" },
+    "lag": { "value": 0, "units": "s" }
+  },
+  "test_dataset": {
+    "$comment": "Reference datasets for CI smoke tests and validation; one per scenario.",
+    "input_files": "data/**/*",
+    "reference_sets": [
+        { "scenario": "external",   "path": "tests/tests_external/**/*" },
+        { "scenario": "hybrid",     "path": "tests/tests_hybrid/**/*" },
+        { "scenario": "user_dtm",   "path": "tests/tests_user_dtm/**/*" },
+        { "scenario": "user_watem", "path": "tests/tests_user_watem/**/*" },
+        { "scenario": "internal",   "path": "tests/tests_internal/**/*" }
+    ],
+    "default_scenario": "hybrid",
+    "seed": null,
+    "description": "Small catchment example with known outputs for static validation"
+    },
+  "provenance": {
+    "$comment": "Fill at runtime (run_id/commit/container/checksum/doi) for reproducibility.",
+    "run_id": null,
+    "git_sha": null,
+    "container": null,
+    "inputs_checksum": null,
+    "doi": null
+  },
+
+  "additional": {
+    "$comment": "Citations, license, and any diagram/catalog notes.",
+    "publications": [
+      "Van Oost K, Govers G, & Desmet PJJ, 2000. Evaluating the effects of changes in landscape structure on soil erosion by water and tillage. Landscape Ecology 15 (6), 579-591. https://doi.org/10.1023/A:1008198215674",
+      "Van Rompaey A, Verstraeten G, Van Oost K, Govers G & Poesen J, 2001. Modelling mean annual sediment yield using a distributed approach. Earth Surface Processes and Landforms 26 (11), 1221-1236. https://doi.org/10.1002/esp.275",
+      "Verstraeten G, Van Oost K, Van Rompaey A, Poesen J & Govers G, 2002. Evaluating an integrated approach to catchment management to reduce soil loss and sediment pollution through modelling. Soil Use and Management, 18, 386-394. https://doi.org/10.1079/SUM2002150"
+    ],
+    "license": "MIT",
+    "model_diagram": "figs/graphAlgo.png",
+    "standard_name_catalog_info": "Workbook: Standard_Names_Aug_2025 — Relief and Physical sheets used where available; remaining fields use CSDMS-like fallbacks."
+  }
+}

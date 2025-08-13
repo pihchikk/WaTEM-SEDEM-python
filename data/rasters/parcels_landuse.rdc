@@ -1,0 +1,26 @@
+file format : Idrisi Raster A.1
+file title  : 
+data type   : integer
+file type   : binary
+columns     : 223
+rows        : 101
+ref. system : utm-37n
+ref. units  : m
+unit dist.  : 1
+min. X      : 319199.0000000
+max. X      : 323659.0000000
+min. Y      : 6295220.0000000
+max. Y      : 6297240.0000000
+pos'n error : unspecified
+resolution  : 20.0000000
+min. value  : -4
+max. value  : 120
+display min : -4
+display max : 120
+value units : unspecified
+value error : unspecified
+flag value  : -9999
+flag def'n  : missing data
+legend cats : 0
+lineage     : 
+comment     : 

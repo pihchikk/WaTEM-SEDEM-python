@@ -1,0 +1,178 @@
+# 1. GENERAL SETTINGS
+version: 1.0
+mode: external  # choose one of:
+                #
+                # external: (when you have all the input files)
+                #   – WaTEM covariates must be present as files; error if any are missing
+                #   – DTM covariates must be present as files; error if any are missing
+                #
+                # hybrid: (most flexible - e.g. when you have some input files and/or don't mind replacing WaTEM-SEDEM inputs with scalar values. 
+                # Can work with a single DTM with no other files present using scalars)
+                #   – WaTEM: load external covariates; fall back to default scalars if missing
+                #   – DTM: load external covariates; compute any missing ones
+                #
+                # user_dtm: (when you have pre-computed DTM-derived covariates, but have no WaTEM-SEDEM-specific covariates - Cfactor, Pfactor, ktc, etc.)
+                #   – WaTEM: compute any missing covariates on the fly or fallback to scalars if no watem input is given
+                #   – DTM: require external covariates; error if any are missing
+                #
+                # user_watem: (when you have pre-computed watemsedem rasters but lack DTM-derived covariates - slope, flow_direction etc.)
+                #   – WaTEM: require external covariates; error if any are missing
+                #   – DTM: compute any missing covariates on the fly
+                #
+                # internal: (when you only have dtm, catchment mask, landuse, Kfactor and river vector/raster) 
+                #   – WaTEM: compute all covariates regardless of existing files
+                #   – DTM: compute all covariates regardless of existing files
+
+
+
+# 1.0 SCENARIO METADATA (for any on-the-fly pywatemsedem preprocessing)
+scenario_year:    2025          # simulation year
+scenario_nr:      1             # scenario number
+
+raster_dir:        "./data/rasters"        # where model-ready rasters live
+segment_tables_dir: "./data/segments"       # where adjacency/upstream tables go
+
+# 1.1 PyWaTEM-SEDEM INPUTS
+raw_input_dir:     "./data/pywatemsedem_input"  # folder containing source data
+raw_inputs:
+  elevation:        "elevation.tif"            # required: DTM (m)
+  catchment:        "catchment.shp"            # required: catchment outline
+  landuse:          "landuse.tif"              # optional: derive Cfactor if needed
+  Kfactor:          "Kfactor.tif"              # optional: soil erodibility map
+  river:            "river.shp"                # optional: channel network
+  water:            "water.shp"                # optional: lakes/wetlands mask
+  infrastructure:   "infrastructure.shp"       # optional: impervious areas
+
+# PyWaTEM-SEDEM output folder settings
+catchment_name:    "sample_catchment"         # name used for Catchment subfolder
+pyws_output_dir:    "./pywatemsedem_preprocessed_rasters"     # root folder for pywatemsedem
+
+dtm_resolution:    20
+dtm_epsg:          32637
+dtm_nodata:        -9999
+
+# 1.2 Which extensions to try for every raster basename
+extensions:
+  - ".tif"
+  - ".tiff"
+  - ".rst"
+  - ".nc"
+
+# 2. MODEL LAYERS (what WaTEM-SEDEM consumes)
+#   source: external|compute|auto  
+#     external = only load, or fallback to default scalar  
+#     compute  = always compute from DTM  
+#     auto     = prefer external, else compute_from_dtm
+
+layers:
+  elevation:
+    required: true
+    source: external
+    # units: meters (m)
+
+  Rfactor:
+    required: false
+    source: auto
+    # units: MJ·mm·ha⁻¹·h⁻¹·yr⁻¹
+
+  bulk-density:
+    required: false
+    source: external
+    # units: kg·m⁻³
+
+  Kfactor:
+    required: true
+    source: auto
+    # units: t·ha⁻¹·MJ⁻¹·mm⁻¹
+
+  Cfactor:
+    required: false
+    source: auto
+    # dimensionless
+
+  Pfactor:
+    required: false
+    source: auto
+    # dimensionless
+
+  ktc:
+    required: false
+    source: auto
+    # dimensionless
+
+  slope:
+    required: true
+    source: auto
+    # units: radians
+
+  flow_accumulation:
+    required: true
+    source: auto
+    # units: m²
+
+  aspect:
+    required: true
+    source: auto
+    # units: radians
+
+  slope_length:
+    required: true
+    source: auto
+    # units: m
+
+  flow_direction:
+    required: true
+    source: auto
+    # D8 codes (0–7)
+
+  routing:
+    required: false
+    source: external
+    # optional D8/network routing code (integer)
+
+  segments:
+    required: false
+    source: external
+    # optional segment ID per cell (int16)
+
+  outlet:
+    required: false
+    source: external
+    # optional outlet mask or segment ID (integer)
+
+  LS-factor:
+    required: true
+    source: auto
+    # dimensionless (RUSLE L×S factor)
+
+# 3. DEFAULT SCALARS (fallback when external rasters missing) - sets a single scalar value for the covariate within the region of interest (catchment mask)
+defaults:
+  Cfactor:      0.37       # dimensionless (set for cropland, refer to https://watem-sedem.github.io/)
+  Kfactor:      70         # t·ha⁻¹·MJ⁻¹·mm⁻¹ (set for consistency as in pywatemsedem, refer to https://watem-sedem.github.io/)
+  Pfactor:      1          # dimensionless
+  Rfactor:      350.0      # MJ·mm·ha⁻¹·h⁻¹·yr⁻¹
+  bulk-density: 1300.0     # kg·m⁻³
+  ktc:          1          # dimensionless
+
+calibration:
+  ktc_multiplier: 25
+
+# 4. DTM COVARIATES (which layers can be derived from the DTM)
+dtm_covariates:
+  slope:             true
+  aspect:            true
+  flow_accumulation: true
+  slope_length:      true
+  flow_direction:    true
+  LS-factor:         true
+
+# 5. OUTPUT SETTINGS
+output:
+  directory:     "./results"   # where to write outputs
+  format:        "tif"         # rst | tif 
+
+  sediment_unit: "kg"          # "m3", "kg" (per cell), or "t/ha"
+  erosion_unit:  "kg"          # "m", "mm", "kg" (per cell), or "t/ha"
+
+  save_rasters:  true          # write SEDI_OUT, CAPACITY, WATEREROS
+  save_plots:    true          # save maps.png instead of interactive display
