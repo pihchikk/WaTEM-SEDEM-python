@@ -59,7 +59,7 @@ Other flags include:
 - `--save-rasters` — write GeoTIFF outputs.
 - `--save-plots` — save png PNG maps.
 
-_Notes:_ values from CLI override those in `config.yaml`.
+Values from CLI override those in `config.yaml`.
 
 ## BMI quick start
 
