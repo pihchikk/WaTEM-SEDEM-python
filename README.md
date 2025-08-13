@@ -73,7 +73,7 @@ Place input data:
   - `source: external` — must exist as a file, otherwise error  
   - `source: compute` — always computed from DEM  
   - `source: auto` — use external file if found, else compute from DEM  
-- **Defaults** — scalar values used if a required raster is missing and `mode` allows to use scalars. **Note:** Rfactor and bulk-density can be passed as a scalar value in any mode 
+- **Defaults** — scalar values used if a required raster is missing and `mode` allows to use scalars. > **Note:** Rfactor and bulk-density can be passed as a scalar value in any mode 
 - **DTM covariates** — enable/disable computing slope, aspect, LS-factor, etc (can be omitted if you have all the necessary files).  
 - **Output settings** — folder, format, units, and whether to save rasters or png plots.
 
