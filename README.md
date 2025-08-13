@@ -56,11 +56,32 @@ git clone https://github.com/pihchikk/Watem-SEDEM-python.git
 cd Watem-SEDEM-python
 pip install -r requirements.txt
 ```
+### 2. Prepare data
 
-Put DTM and DTM-related covariates into `data/rasters/` and pywatemsedem inputs (e.g. landuse, catchment) into `data/pywatemsedem_input/`.
-_Note_: DTM must be present in both `pywatemsedem_input` and `rasters` folders
+Place input data:
 
-### 2. From the repo root:
+- `data/rasters/` — DEM and any **precomputed DTM covariates** (slope, aspect, LS, flow direction…) and any **WaTEM rasters** (K, C, P, ktc…).
+- `data/pywatemsedem_input/` — **pywatemsedem base inputs** (e.g., landuse, catchment, DEM for pywatemsedem processing).
+
+> **Note:** The DEM should be present in **both** `data/rasters/` and `data/pywatemsedem_input/` if you want internal computations to work.
+
+### Filling `config.yaml`:
+
+- **General settings** — model version, `mode` (see *Run Modes* above), and scenario metadata.  
+- **Input paths** — the location of precomputed input rasters (`data/rasters/`) and pywatemsedem inputs (`data/pywatemsedem_input/`).  
+- **Layer sources** — for each model variable specify:
+  - `source: external` — must exist as a file, otherwise error  
+  - `source: compute` — always computed from DEM  
+  - `source: auto` — use external file if found, else compute from DEM  
+- **Defaults** — scalar values used if a required raster is missing and `mode` allows to use scalars. **Note:** Rfactor and bulk-density can be passed as a scalar value in any mode 
+- **DTM covariates** — enable/disable computing slope, aspect, LS-factor, etc (can be omitted if you have all the necessary files).  
+- **Output settings** — folder, format, units, and whether to save rasters or png plots.
+
+> **Example:**  
+> If you only have a DEM, catchment mask, and landuse, you can set  
+> `mode: hybrid` to let the model compute missing DTM covariates and use default scalars for WaTEM factors.
+
+### 3. From the repo root:
 ```bash
 python src/run_watem.py -c config.yaml --mode hybrid
 ```
