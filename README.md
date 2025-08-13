@@ -57,6 +57,9 @@ cd Watem-SEDEM-python
 pip install -r requirements.txt
 ```
 
+Put DTM and DTM-related covariates into `data/rasters/` and pywatemsedem inputs (e.g. landuse, catchment) into `data/pywatemsedem_input/`.
+_Note_: DTM must be present in both `pywatemsedem_input` and `rasters` folders
+
 ### 2. From the repo root:
 ```bash
 python src/run_watem.py -c config.yaml --mode hybrid
