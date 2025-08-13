@@ -5,7 +5,7 @@ The repo lets you run the core WaTEM-SEDEM model using Python, wrapped with the 
 It can be used in two ways:
 
 - **As a standalone script** via `src/run_watem.py` — to run directly using a config file.  
-- **As a BMI module** (`bmi_watem.py`) — within a wrrapper to integrate into larger model frameworks.
+- **As a BMI module** (`bmi_watem.py`) — within a wrapper to integrate into larger model frameworks.
 
 **Note:** This is not a full-featured version. It supports a single, default (“relief-based”) scenario—no tillage, strips, infrastructure, or multi-factor enhancements. Modes control *how inputs are sourced*, not alternative erosion logic.
 
@@ -37,7 +37,18 @@ None of these change the core model logic—just how data is supplied.
 
 ## How to Run
 
-From the repo root:
+Some preprocessing steps (e.g., slope, LS-factor) call **SAGA GIS** (`saga_cmd`).  
+Ensure SAGA is installed and available in your `PATH`. Usability has been checked for **SAGA GIS 8.5.1**  
+([download here](https://sourceforge.net/projects/saga-gis/files/SAGA%20-%208/SAGA%20-%208.5.1/)).
+
+### 1. Clone and install
+```bash
+git clone https://github.com/<your-org-or-user>/Watem-SEDEM-python.git
+cd Watem-SEDEM-python
+pip install -r requirements.txt
+```
+
+### 2. From the repo root:
 ```bash
 python src/run_watem.py -c config.yaml --mode hybrid
 ```
