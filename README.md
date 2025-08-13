@@ -7,7 +7,7 @@ It can be used in two ways:
 - **As a standalone script** via `src/run_watem.py` — to run directly using a config file.  
 - **As a BMI module** (`bmi_watem.py`) — within a wrapper to integrate into larger model frameworks.
 
-**Note:** This is not a full-featured version. It supports a single, default (“relief-based”) scenario—no tillage, strips, infrastructure, or multi-factor enhancements. Modes control *how inputs are sourced*, not alternative erosion logic.
+**Note:** This is not a full-featured version. It supports a single default scenario with no tillage, strips, infrastructure, or multi-factor options. Modes control *input files configuration* only.
 
 ---
 
