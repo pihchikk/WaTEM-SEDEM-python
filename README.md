@@ -43,7 +43,7 @@ Ensure SAGA is installed and available in your `PATH`. Usability has been checke
 
 ### 1. Clone and install
 ```bash
-git clone https://github.com/<your-org-or-user>/Watem-SEDEM-python.git
+git clone https://github.com/pihchikk/Watem-SEDEM-python.git
 cd Watem-SEDEM-python
 pip install -r requirements.txt
 ```
