@@ -514,7 +514,6 @@
       "Verstraeten G, Van Oost K, Van Rompaey A, Poesen J & Govers G, 2002. Evaluating an integrated approach to catchment management to reduce soil loss and sediment pollution through modelling. Soil Use and Management, 18, 386-394. https://doi.org/10.1079/SUM2002150"
     ],
     "license": "MIT",
-    "model_diagram": "figs/graphAlgo.png",
-    "standard_name_catalog_info": "Workbook: Standard_Names_Aug_2025 — Relief and Physical sheets used where available; remaining fields use CSDMS-like fallbacks."
+    "model_diagram": "todo",
   }
 }
