@@ -11,7 +11,7 @@ It can be used in two ways:
 
 ---
 
-## Project Structure
+## Structure
 
 - `src/` — Python scripts for preprocessing, execution, and BMI access  
 - `data/` — example input files under `rasters/` and `pywatemsedem_input/`  
