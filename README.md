@@ -14,7 +14,7 @@ It can be used in two ways:
 ## Structure
 
 - `src/` — Python scripts for preprocessing, execution, and BMI access  
-- `data/` — example input files under `rasters/` and `pywatemsedem_input/`  
+- `data/` — example input files under `rasters/` and `pywatemsedem_input/`. The object is a test area within All-Russian Research Institute of Reclaimed Lands   
 - `tests/` — reference outputs per input mode  
 - `metadata/` — JSON descriptors like `WaTEM_SEDEM_STD_extended.json` (schema + standard model metadata)  
 - `config.yaml` — central run configuration
