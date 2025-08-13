@@ -1,0 +1,443 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/earth-model-base.schema.json",
+  "title": "Earth-Model Base Template (tiny)",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["model_identification", "bmi", "runtime_environment", "execution_parameters"],
+  "properties": {
+    "model_identification": {
+      "type": "object",
+      "required": ["full_name", "short_name", "version"],
+      "properties": {
+        "full_name": { "type": "string" },
+        "short_name": { "type": "string" },
+        "authors": { "type": "array", "items": { "type": "string" } },
+        "version": { "type": "string" },
+        "last_update": { "type": "string" },
+        "model_type": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "policy": {
+      "type": "object",
+      "properties": {
+        "units": { "type": "string", "enum": ["UDUNITS"] },
+        "standard_names": { "type": "string", "enum": ["CSDMS"] },
+        "nodata": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+
+    "bmi": {
+      "type": "object",
+      "required": ["component_name", "model_class", "grid", "input_vars", "output_vars", "time"],
+      "properties": {
+        "component_name": { "type": "string" },
+        "model_class": { "type": "string" },
+        "grid": {
+          "type": "object",
+          "required": ["type", "rank"],
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["uniform_rectilinear", "rectilinear", "structured", "unstructured", "points", "network"]
+            },
+            "rank": { "type": "integer", "minimum": 1, "maximum": 3 }
+          },
+          "additionalProperties": true
+        },
+        "input_vars": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "output_vars": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+        "time": {
+          "type": "object",
+          "required": ["start_time", "end_time", "time_step", "time_units"],
+          "properties": {
+            "start_time": { "type": "number" },
+            "end_time": { "type": "number" },
+            "time_step": { "type": "number" },
+            "time_units": { "type": "string", "enum": ["s", "min", "hour", "day", "year"] }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+
+    "model_access": { "type": "object" },
+
+    "runtime_environment": {
+      "type": "object",
+      "required": ["language"],
+      "properties": {
+        "operating_system": { "type": "array", "items": { "type": "string" } },
+        "language": { "type": "string" },
+        "dependencies": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+
+    "execution_parameters": {
+      "type": "object",
+      "properties": {
+        "time": {
+          "type": "object",
+          "properties": {
+            "time_step": { "type": "number" },
+            "time_units": { "type": "string", "enum": ["s", "min", "hour", "day", "year"] }
+          },
+          "additionalProperties": true
+        },
+        "units": { "type": "object" },
+        "allowed_units": { "type": "object" }
+      },
+      "additionalProperties": true
+    },
+
+    "grids": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "integer" },
+          "type": { "type": "string" }
+        },
+        "additionalProperties": true
+      }
+    },
+
+    "variables": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/$defs/variable" }
+    },
+
+    "input_parameters": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/parameter" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true,
+      "examples": [[
+        {
+          "name": "elevation",
+          "abbr": "DEM",
+          "description": "Digital elevation model",
+          "units": "m",
+          "file_format": "tif",
+          "data_type": "float32",
+          "required": true,
+          "standard_name": "land_surface__elevation",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "slope",
+          "abbr": "slope",
+          "description": "Terrain slope",
+          "units": "radian",
+          "file_format": "tif",
+          "data_type": "float32",
+          "required": false,
+          "standard_name": "relief_slope",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "aspect",
+          "abbr": "aspect",
+          "description": "Terrain aspect",
+          "units": "radian",
+          "file_format": "tif",
+          "data_type": "float32",
+          "required": false,
+          "standard_name": "relief_aspect",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "flow_accumulation",
+          "abbr": "FA",
+          "description": "Upslope contributing area (cell count)",
+          "units": "1",
+          "file_format": "tif",
+          "data_type": "float32",
+          "required": false,
+          "standard_name": "relief_flow-accumulation",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "slope_length",
+          "abbr": "SL",
+          "description": "Slope length",
+          "units": "m",
+          "file_format": "tif",
+          "data_type": "float32",
+          "required": false,
+          "standard_name": "topographic__slope_length",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "flow_direction",
+          "abbr": "FD",
+          "description": "D8 codes (0–7; -1 nodata/no-flow)",
+          "units": "1",
+          "file_format": "tif",
+          "data_type": "int16",
+          "required": false,
+          "standard_name": "flow__direction_d8",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "LS-factor",
+          "abbr": "LS",
+          "description": "RUSLE L×S factor",
+          "units": "1",
+          "file_format": "tif",
+          "data_type": "float32",
+          "required": false,
+          "standard_name": "relief_index~ls-factor",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "Kfactor",
+          "abbr": "K",
+          "description": "Soil erodibility",
+          "units": "kg h MJ-1 mm-1",
+          "file_format": "tif or scalar",
+          "data_type": "float32",
+          "required": false,
+          "default": 70.0,
+          "standard_name": "relief_k-factor",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "Cfactor",
+          "abbr": "C",
+          "description": "Cover-management factor",
+          "units": "1",
+          "file_format": "tif or scalar",
+          "data_type": "float32",
+          "required": false,
+          "default": 0.37,
+          "standard_name": "relief_c-factor",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "Pfactor",
+          "abbr": "P",
+          "description": "Support-practice factor",
+          "units": "1",
+          "file_format": "tif or scalar",
+          "data_type": "float32",
+          "required": false,
+          "default": 1.0,
+          "standard_name": "support_practice__erosion_factor",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "ktc",
+          "abbr": "KTC",
+          "description": "Transport-capacity coefficient (scaled by calibration.multiplier)",
+          "units": "1",
+          "file_format": "tif or scalar",
+          "data_type": "float32",
+          "required": false,
+          "default": 1.0,
+          "standard_name": "sediment_transport__capacity_coefficient",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "Rfactor",
+          "abbr": "R",
+          "description": "Rainfall erosivity",
+          "units": "MJ mm ha-1 h-1 yr-1",
+          "file_format": "scalar or tif",
+          "data_type": "float32",
+          "required": false,
+          "default": 350.0,
+          "standard_name": "relief_r-factor",
+          "standard_name_source": "Workbook: Relief"
+        },
+        {
+          "name": "bulk-density",
+          "abbr": "BD",
+          "description": "Soil bulk density",
+          "units": "kg m-3",
+          "file_format": "scalar or tif",
+          "data_type": "float32",
+          "required": false,
+          "default": 1300.0,
+          "standard_name": "soil_density_bulk",
+          "standard_name_source": "Workbook: Physical"
+        },
+        {
+          "name": "routing",
+          "abbr": "routing",
+          "description": "Optional routing codes",
+          "units": "1",
+          "file_format": "tif",
+          "data_type": "int16",
+          "required": false,
+          "standard_name": "network__routing_code",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "segments",
+          "abbr": "segments",
+          "description": "Optional segment ID per cell",
+          "units": "1",
+          "file_format": "tif",
+          "data_type": "int16",
+          "required": false,
+          "standard_name": "network_channel__segment_id",
+          "standard_name_source": "CSDMS-like fallback"
+        },
+        {
+          "name": "outlet",
+          "abbr": "outlet",
+          "description": "Optional outlet mask or segment ID",
+          "units": "1",
+          "file_format": "tif",
+          "data_type": "int16",
+          "required": false,
+          "standard_name": "network_channel__outlet_id",
+          "standard_name_source": "CSDMS-like fallback"
+        }
+      ]]
+    },
+
+    "output_parameters": {
+      "type": "object",
+      "properties": {
+        "items": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/output" },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": true,
+      "examples": [[
+        {
+          "name": "SEDI_OUT",
+          "abbr": "SedimentExport",
+          "description": "Net sediment export per cell",
+          "units": "dynamic",
+          "units_source": "yaml: output.sediment_unit",
+          "runtime_units": ["m3 cell-1", "kg cell-1", "t ha-1"],
+          "file_format": "tif",
+          "data_type": "float32",
+          "standard_name": "land_surface_sediment__export_volume"
+        },
+        {
+          "name": "CAPACITY",
+          "abbr": "TransportCapacity",
+          "description": "Sediment transport capacity per cell",
+          "units": "dynamic",
+          "units_source": "yaml: output.sediment_unit",
+          "runtime_units": ["m3 cell-1", "kg cell-1", "t ha-1"],
+          "file_format": "tif",
+          "data_type": "float32",
+          "standard_name": "channel_sediment__transport_capacity_volume"
+        },
+        {
+          "name": "WATEREROS",
+          "abbr": "WaterErosion",
+          "description": "Erosion (+) / deposition (−) as thickness or mass-per-area",
+          "units": "dynamic",
+          "units_source": "yaml: output.erosion_unit",
+          "runtime_units": ["m", "mm", "kg cell-1", "t ha-1"],
+          "file_format": "tif",
+          "data_type": "float32",
+          "standard_name": "land_surface__erosion_deposition_thickness"
+        }
+      ]]
+    },
+
+    "test_dataset": {
+      "$ref": "#/$defs/test_dataset"
+    }
+  },
+
+  "$defs": {
+    "parameter": {
+      "type": "object",
+      "required": ["name", "units", "file_format", "data_type", "required"],
+      "properties": {
+        "name": { "type": "string" },
+        "abbr": { "type": "string" },
+        "description": { "type": "string" },
+        "units": { "type": "string" },
+        "file_format": { "type": "string" },
+        "data_type": {
+          "type": "string",
+          "enum": ["float32", "float64", "int16", "int32", "uint8", "string", "bool"]
+        },
+        "required": { "type": "boolean" },
+        "default": {},
+        "standard_name": { "type": "string" },
+        "standard_name_source": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+
+    "output": {
+      "allOf": [
+        { "$ref": "#/$defs/parameter" },
+        {
+          "type": "object",
+          "properties": {
+            "units": { "type": "string" },
+            "units_source": { "type": "string" },
+            "runtime_units": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      ]
+    },
+
+    "test_dataset": {
+      "type": "object",
+      "properties": {
+        "$comment": { "type": "string" },
+        "input_files": { "type": "string" },
+        "reference_output": { "type": "string" },
+        "seed": { "type": ["integer", "null"] },
+        "description": { "type": "string" }
+      },
+      "required": ["input_files", "reference_output"],
+      "additionalProperties": false
+    },
+
+    "variable": {
+      "type": "object",
+      "required": ["intent", "dtype", "standard_name", "units"],
+      "properties": {
+        "intent": { "type": "string", "enum": ["in", "out", "inout"] },
+        "grid": { "type": "integer" },
+        "location": { "type": "string" },
+        "dtype": {
+          "type": "string",
+          "enum": ["float32", "float64", "int16", "int32", "uint8", "bool"]
+        },
+        "units": { "type": "string" },
+        "units_source": { "type": "string" },
+        "runtime_units": { "type": "array", "items": { "type": "string" } },
+        "standard_name": { "type": "string" },
+        "time_dependence": { "type": "string", "enum": ["static", "steady", "transient"] },
+        "valid_range": {
+          "type": "array",
+          "items": [
+            { "type": ["number", "null"] },
+            { "type": ["number", "null"] }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      },
+      "additionalProperties": true
+    }
+  }
+}
