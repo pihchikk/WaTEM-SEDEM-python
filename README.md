@@ -82,7 +82,7 @@ Place input data:
 > If you only have a DEM, catchment mask, and landuse, you can set  
 > `mode: hybrid` to let the model compute missing DTM covariates and use default scalars for WaTEM factors.
 
-### 3. From the repo root:
+### 3. Running rom the repo root:
 ```bash
 python src/run_watem.py -c config.yaml --mode hybrid
 ```
