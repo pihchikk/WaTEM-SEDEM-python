@@ -18,7 +18,7 @@ It can be used in two ways:
 - `tests/` — reference outputs per input mode  
 - `metadata/` — JSON descriptors like `WaTEM_SEDEM_STD_extended.json` (schema + standard model metadata)  
 - `config.yaml` — central run configuration
-- `userchoices.ini` — default preprocessing settings file for building the Scenario object (from pywatemsedem). See ([pywatemsedem docs](https://watem-sedem.github.io/pywatemsedem/getting-started/api.html))
+- `userchoices.ini` — default preprocessing settings file for building the Scenario object (from pywatemsedem). See [pywatemsedem docs](https://watem-sedem.github.io/pywatemsedem/getting-started/api.html)
 ---
 
 ## Run Modes
