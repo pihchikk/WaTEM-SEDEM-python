@@ -1,6 +1,6 @@
 # WaTEM-SEDEM (Python BMI Wrapper)
 
-The repo lets you run the core WaTEM-SEDEM model using Python, wrapped with the Basic Model Interface (BMI) with the use of simplified input file preprocessing logic from [pywatemsedem](https://github.com/watem-sedem/pywatemsedem).
+The repo lets you run the core WaTEM-SEDEM model in Python, wrapped with the Basic Model Interface (BMI) with the use of simplified input file preprocessing logic from [pywatemsedem](https://github.com/watem-sedem/pywatemsedem).
 
 It can be used in two ways:
 
