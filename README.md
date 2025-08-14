@@ -4,8 +4,8 @@ The repo lets you run the core WaTEM-SEDEM model in Python, wrapped with the Bas
 
 It can be used in two ways:
 
-- **As a standalone script** via `src/run_watem.py` — to run directly using a config file.  
-- **As a BMI module** (`bmi_watem.py`) — within a wrapper to integrate into larger model frameworks.
+- **As a standalone script** via `src/run_watem.py` - to run directly using a config file.  
+- **As a BMI module** (`bmi_watem.py`) - within a wrapper to integrate into larger model frameworks.
 
 **Note:** This is not a full-featured version. It supports a single default scenario with no tillage, strips, infrastructure, or multi-factor options. Modes control *input files configuration* only.
 
@@ -13,12 +13,12 @@ It can be used in two ways:
 
 ## Structure
 
-- `src/` — Python scripts for preprocessing, execution, and BMI access  
-- `data/` — example input files under `rasters/` and `pywatemsedem_input/`. The object is a test area within All-Russian Research Institute of Reclaimed Lands   
-- `tests/` — reference outputs per input mode  
-- `metadata/` — JSON descriptors like `WaTEM_SEDEM_STD_extended.json` (schema + standard model metadata)  
-- `config.yaml` — central run configuration
-- `userchoices.ini` — default preprocessing settings file for building the Scenario object (from pywatemsedem). See [pywatemsedem docs](https://watem-sedem.github.io/pywatemsedem/getting-started/api.html)
+- `src/` - Python scripts for preprocessing, execution, and BMI access  
+- `data/` - example input files under `rasters/` and `pywatemsedem_input/`. The object is a test area within All-Russian Research Institute of Reclaimed Lands   
+- `tests/` - reference outputs per input mode  
+- `metadata/` - JSON descriptors like `WaTEM_SEDEM_STD_extended.json` (schema + standard model metadata)  
+- `config.yaml` - central run configuration
+- `userchoices.ini` - default preprocessing settings file for building the Scenario object (from pywatemsedem). See [pywatemsedem docs](https://watem-sedem.github.io/pywatemsedem/getting-started/api.html)
 ---
 
 ## Run Modes
@@ -34,13 +34,13 @@ Depending what input data you have, a few modes are available:
 | **internal**  | Compute all from available base data      | Compute all from available base data                           |
 
 **Possible input configuration examples:**  
-- Only DTM, catchment mask, and landuse — use `hybrid`.
-- DTM, catchment mask, landuse, Kfactor and river vector/raster — use `internal`.  
-- DTM and Precomputed slope/aspect/LS but no WaTEM rasters — use `user_dtm`.  
-- DTM and Precomputed WaTEM rasters but no slope/aspect/LS — use `user_watem`.  
-- Complete set of DTM-related and WaTEM rasters — use `external`.  
+- Only DTM, catchment mask, and landuse - use `hybrid`.
+- DTM, catchment mask, landuse, Kfactor and river vector/raster - use `internal`.  
+- DTM and Precomputed slope/aspect/LS but no WaTEM rasters - use `user_dtm`.  
+- DTM and Precomputed WaTEM rasters but no slope/aspect/LS - use `user_watem`.  
+- Complete set of DTM-related and WaTEM rasters - use `external`.  
 
-None of these change the core model logic—just how data is supplied.
+None of these change the core model logic, just the input configuration.
 
 ---
 
