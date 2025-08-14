@@ -67,16 +67,16 @@ Place input data:
 
 ### Filling `config.yaml`:
 
-- **General settings** — model version, `mode` (see *Run Modes* above), and scenario metadata.  
-- **Input paths** — the location of precomputed input rasters (`data/rasters/`) and pywatemsedem inputs (`data/pywatemsedem_input/`).  
-- **Layer sources** — for each model variable specify:
-  - `source: external` — must exist as a file, otherwise error  
-  - `source: compute` — always computed from DEM  
-  - `source: auto` — use external file if found, else compute from DEM  
-- **Defaults** — scalar values used if a required raster is missing and `mode` allows to use scalars.
+- **General settings** - model version, `mode` (see *Run Modes* above), and scenario metadata.  
+- **Input paths** - the location of precomputed input rasters (`data/rasters/`) and pywatemsedem inputs (`data/pywatemsedem_input/`).  
+- **Layer sources** - for each model variable specify:
+  - `source: external` - must exist as a file, otherwise error  
+  - `source: compute` - always computed from DEM  
+  - `source: auto` - use external file if found, else compute from DEM  
+- **Defaults** - scalar values used if a required raster is missing and `mode` allows to use scalars.
 > **Note:** Rfactor and bulk-density can be passed as scalar values in any mode 
-- **DTM covariates** — enable/disable computing slope, aspect, LS-factor, etc (can be omitted if you have all the necessary files).  
-- **Output settings** — folder, format, units, and whether to save rasters or png plots.
+- **DTM covariates** - enable/disable computing slope, aspect, LS-factor, etc (can be omitted if you have all the necessary files).  
+- **Output settings** - folder, format, units, and whether to save rasters or png plots.
 
 > **Example:**  
 > If you only have a DEM, catchment mask, and landuse, you can set  
