@@ -88,10 +88,10 @@ python src/run_watem.py -c config.yaml --mode hybrid
 ```
 Other flags include:
 
-- `-c, --config PATH` — path to the YAML config (e.g., `config.yaml`).
-- `--mode {external|hybrid|user_dtm|user_watem|internal}` — how inputs are sourced.
-- `--save-rasters` — write GeoTIFF outputs.
-- `--save-plots` — save png PNG maps.
+- `-c, --config PATH` - path to the YAML config (e.g., `config.yaml`).
+- `--mode {external|hybrid|user_dtm|user_watem|internal}` - how inputs are sourced.
+- `--save-rasters` - write GeoTIFF outputs.
+- `--save-plots` - save png PNG maps.
 
 Values from CLI override those in `config.yaml`.
 
