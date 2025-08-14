@@ -171,7 +171,7 @@
       "dtype": "int16",
       "units": "1",
       "standard_name": "flow__direction_d8",
-      "attributes": { "codes": "0–7, -1=no-flow" }
+      "attributes": { "codes": "0-7, -1 = no flow" }
     },
     "SEDI_OUT": {
       "$comment": "Runtime unit taken from YAML (output.sediment_unit).",
@@ -411,7 +411,7 @@
       {
         "name": "WATEREROS",
         "abbr": "WaterErosion",
-        "description": "Erosion (+) / deposition (−) as thickness or mass-per-area",
+        "description": "Erosion (+) / deposition (-) as thickness or mass-per-area",
         "units": "dynamic",
         "units_source": "yaml: output.erosion_unit",
         "runtime_units": ["m", "mm", "kg", "t ha-1"],
