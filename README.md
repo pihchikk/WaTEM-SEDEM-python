@@ -50,6 +50,23 @@ Some preprocessing steps (e.g., slope, LS-factor) call **SAGA GIS** (`saga_cmd`)
 Ensure SAGA is installed and available in your `PATH`. Usability has been checked for **SAGA GIS 8.5.1**  
 ([download here](https://sourceforge.net/projects/saga-gis/files/SAGA%20-%208/SAGA%20-%208.5.1/)).
 
+### GDAL prerequisite
+This project uses Fiona/Rasterio/GeoPandas, which require the **GDAL C library** at runtime.
+
+**Ubuntu/Debian**
+```bash
+sudo apt-get update && sudo apt-get install -y libgdal34 gdal-bin
+# use libgdal35/libgdal36 if your wheel targets a different GDAL ABI
+```
+
+**Windows** (recommended: conda-forge)
+```powershell
+conda create -n watem -c conda-forge python=3.12 gdal fiona rasterio geopandas pyproj shapely
+conda activate watem
+pip install -r requirements.txt --no-deps
+```
+
+
 ### 1. Clone and install
 ```bash
 git clone https://github.com/pihchikk/Watem-SEDEM-python.git
