@@ -61,8 +61,8 @@ sudo apt-get update && sudo apt-get install -y libgdal34 gdal-bin
 
 **Windows** (recommended: conda-forge)
 ```powershell
-conda create -n watem -c conda-forge python=3.12 gdal fiona rasterio geopandas pyproj shapely
-conda activate watem
+conda create -n WaTEM-SEDEM-python -c conda-forge python=3.12 gdal fiona rasterio geopandas pyproj shapely
+conda activate WaTEM-SEDEM-python
 pip install -r requirements.txt --no-deps
 ```
 
