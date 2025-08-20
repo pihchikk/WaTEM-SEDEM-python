@@ -46,7 +46,6 @@ None of these change the core model logic, just the input configuration.
 
 ## How to Run
 
-**NOTE!!**
 Some preprocessing steps (e.g., slope, LS-factor) call **SAGA GIS** (`saga_cmd`).  
 Ensure SAGA is installed and available in your `PATH`. Usability has been checked for **SAGA GIS 8.5.1**  
 ([download here](https://sourceforge.net/projects/saga-gis/files/SAGA%20-%208/SAGA%20-%208.5.1/)).
