@@ -23,7 +23,7 @@ It can be used in two ways:
 
 ## Run Modes
 
-Depending what input data you have, a few modes are available:
+Depending what input data you have a few modes are available:
 
 | Mode          | WaTEM covariates (K, C, P, ktc, etc.)     | DTM covariates (slope, aspect, LS, flow dir, etc.)             |
 |---------------|------------------------------------------|----------------------------------------------------------------|
