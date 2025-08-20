@@ -11,5 +11,4 @@ fiona>=1.9
 shapely>=2.0
 pyproj>=3.4
 pywatemsedem
-richdem
 netCDF4>=1.6
