@@ -78,8 +78,8 @@ pip install -r requirements.txt
 
 Place input data:
 
-- `data/rasters/` — DEM and any **precomputed DTM covariates** (slope, aspect, LS, flow direction…) and any **WaTEM rasters** (K, C, P, ktc…).
-- `data/pywatemsedem_input/` — **pywatemsedem base inputs** (e.g., landuse, catchment, DEM for pywatemsedem processing).
+- `data/rasters/` — DTM and any **precomputed DTM covariates** (slope, aspect, LS, flow direction…) and any **WaTEM rasters** (K, C, P, ktc…).
+- `data/pywatemsedem_input/` — **pywatemsedem base inputs** (e.g., landuse, catchment, DTM for pywatemsedem processing).
 
 > **Note:** The DEM should be present in **both** `data/rasters/` and `data/pywatemsedem_input/` if you want internal computations to work.
 
