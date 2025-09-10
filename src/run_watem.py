@@ -78,7 +78,7 @@ def main() -> None:
         if not isinstance(data[key], np.ndarray):
             data[key] = np.full(shape, data[key], dtype=float)
 
-    m = cfg.model_dump().get("calibration", {}).get("ktc_multiplier", 1.0)
+    m = cfg.calibration.ktc_multiplier
     data["ktc"] = (data["ktc"].astype(float) if isinstance(data["ktc"], np.ndarray) else float(data["ktc"])) * m
 
     logger.debug(
