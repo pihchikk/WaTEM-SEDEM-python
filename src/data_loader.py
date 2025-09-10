@@ -28,7 +28,7 @@ from rasterio.features import rasterize
 import pywatemsedem.geo.utils as _utils
 _utils.clean_up_tempfiles = lambda *args, **kwargs: None
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, ConfigDict
 
 from pywatemsedem.catchment import Catchment
 from pywatemsedem.cfactor import create_cfactor_degerick2015
@@ -67,7 +67,13 @@ class OutputConfig(BaseModel):
     save_plots: bool = False
 
 
+class Calibration(BaseModel):
+    ktc_multiplier: float = 1.0
+
+
 class Config(BaseModel):
+    model_config = ConfigDict(extra='ignore')
+
     version: float
     mode: Literal["external", "user_dtm", "user_watem", "hybrid", "internal"]
     raster_dir: str
@@ -79,16 +85,17 @@ class Config(BaseModel):
     defaults: Dict[str, Any]
     dtm_covariates: Dict[str, bool]
     output: OutputConfig
-
+    calibration: Calibration
     config_path: Optional[str] = None
     scenario_year: Optional[int] = None
     scenario_nr: Optional[int] = None
     catchment_name: Optional[str] = None
     pyws_output_dir: Optional[str] = None
 
-    @field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
-    def _expand_paths(cls, v: str) -> str:
-        return os.path.expanduser(v)
+    field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
+    
+    def _expand_paths(cls, v: Optional[str]) -> Optional[str]:
+        return os.path.expanduser(v) if isinstance(v, str) else v
 
 
 # ── CLI argparser ───────────────────────────────────────────────────────────────
