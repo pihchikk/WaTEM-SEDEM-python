@@ -92,7 +92,8 @@ class Config(BaseModel):
     catchment_name: Optional[str] = None
     pyws_output_dir: Optional[str] = None
 
-    field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
+    @field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
+    @classmethod
     
     def _expand_paths(cls, v: Optional[str]) -> Optional[str]:
         return os.path.expanduser(v) if isinstance(v, str) else v
