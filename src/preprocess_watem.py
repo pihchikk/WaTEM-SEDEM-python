@@ -15,9 +15,6 @@ from affine import Affine
 import logging
 
 from pywatemsedem.catchment   import Catchment
-from pywatemsedem.userchoices import UserChoices
-from pywatemsedem.scenario    import Scenario
-from pywatemsedem.geo.rasters import AbstractRaster
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +59,13 @@ def preprocess_all(
     show_preview: bool = False,
 ) -> None:
     """End-to-end prep: Catchment, optional dummies, Scenario, write outputs."""
+    # Imported lazily: only preprocess_all() needs these, and pinning their
+    # availability at module import time would break external/user_watem-mode
+    # callers (data_loader imports this module unconditionally) even though
+    # they never reach this function.
+    from pywatemsedem.userchoices import UserChoices
+    from pywatemsedem.scenario import Scenario
+
     cfg = load_config(cfg_path)
     logger.info("Loaded config from %s", cfg_path)
 

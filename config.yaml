@@ -157,6 +157,29 @@ defaults:
 calibration:
   ktc_multiplier: 25
 
+# EPOCH COUPLING (AquaCrop + LISEM → WaTEM-SEDEM)
+# See docs/COUPLING_VARS_LEDGER.md for the full division of labor and caveats.
+coupling_mode: static
+  # static: current stand-alone behavior — default scalar/raster Cfactor/Rfactor from
+  #         this file, unchanged. Use this for the baseline run in the comparison harness.
+  # epoch:  one update() per AquaCrop growing season; Cfactor/Rfactor are derived from
+  #         a coupled run's daily outputs via src/coupling_drivers.py.
+  # event:  one update() per rainfall event identified from the daily rain series;
+  #         lower priority, see disable_if_lisem_covers_event below.
+
+flow_direction_source: internal
+  # internal: WaTEM-SEDEM derives its own D8 grid from the DTM (current/default behavior).
+  # external: ingest a pre-computed flow-direction raster (e.g. LISEM's routed grid) via
+  #           external_flow_direction_path instead — required when both models cover the
+  #           same catchment so sediment routing agrees between them.
+external_flow_direction_path: null   # path to raster; required if flow_direction_source: external
+
+# event-mode only: when true, update() logs a warning and skips the erosion solve for any
+# day/window already covered by an active LISEM event run, instead of double-counting the
+# same storm. Seasonal-epoch mode is inherently non-overlapping with LISEM's per-storm
+# accounting, so this flag has no effect there.
+disable_if_lisem_covers_event: true
+
 # 4. DTM COVARIATES (which layers can be derived from the DTM)
 dtm_covariates:
   slope:             true

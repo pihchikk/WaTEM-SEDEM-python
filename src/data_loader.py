@@ -92,6 +92,23 @@ class Config(BaseModel):
     catchment_name: Optional[str] = None
     pyws_output_dir: Optional[str] = None
 
+    # ── epoch coupling (AquaCrop/LISEM → WaTEM-SEDEM) ─────────────────────
+    # "static": current stand-alone behavior (default scalar/raster drivers).
+    # "epoch": one update() per growing season, drivers derived from daily
+    #          AquaCrop/LISEM series via src/coupling_drivers.py.
+    # "event": one update() per rainfall event (lower priority; see ledger doc).
+    coupling_mode: Literal["static", "epoch", "event"] = "static"
+
+    # "internal": WaTEM-SEDEM derives its own D8 grid (default, current behavior).
+    # "external": ingest a pre-computed flow-direction raster (e.g. from LISEM)
+    #             via external_flow_direction_path instead.
+    flow_direction_source: Literal["internal", "external"] = "internal"
+    external_flow_direction_path: Optional[str] = None
+
+    # event-mode only: skip the erosion solve for a day/window already covered
+    # by an active LISEM event run, to avoid double-counting the same storm.
+    disable_if_lisem_covers_event: bool = True
+
     @field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
     @classmethod
     
