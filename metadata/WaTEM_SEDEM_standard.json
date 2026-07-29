@@ -6,7 +6,7 @@
     "short_name": "WaTEM",
     "authors": ["Danila Bardashov bardashov_dr@esoil.ru"],
     "version": "1.0",
-    "last_update": "2025-08-12",
+    "last_update": "2026-07-12",
     "model_type": [
       "deterministic",
       "empirical",
