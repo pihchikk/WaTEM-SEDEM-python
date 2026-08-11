@@ -12,8 +12,21 @@ import numpy as np
 import rasterio
 from affine import Affine
 
-from pywatemsedem.defaults import SAGA_FLAGS
-from pywatemsedem.geo.utils import load_raster, clean_up_tempfiles
+# pywatemsedem imported lazily: it raises OSError at import time without SAGA
+# GIS, and everything it provides here is only used by the SAGA-backed
+# DTM-derivation helpers. `external` mode reads pre-computed rasters instead
+# and must not require SAGA at all.
+def __getattr__(name):
+    if name in ('SAGA_FLAGS', 'load_raster', 'clean_up_tempfiles'):
+        from pywatemsedem.defaults import SAGA_FLAGS
+        from pywatemsedem.geo.utils import clean_up_tempfiles, load_raster
+        globals().update(
+            SAGA_FLAGS=SAGA_FLAGS,
+            load_raster=load_raster,
+            clean_up_tempfiles=clean_up_tempfiles,
+        )
+        return globals()[name]
+    raise AttributeError(name)
 
 import logging
 logger = logging.getLogger(__name__)

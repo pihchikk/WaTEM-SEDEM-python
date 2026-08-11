@@ -25,13 +25,20 @@ from rasterio.warp import reproject, Resampling
 from rasterio.features import rasterize
 
 # Optional cleanup override used by pywatemsedem
-import pywatemsedem.geo.utils as _utils
-_utils.clean_up_tempfiles = lambda *args, **kwargs: None
+# NOTE: pywatemsedem is imported lazily (see _load_pywatemsedem below) -- it
+# raises OSError at import time when SAGA GIS is absent, and it is only ever
+# needed by the Cfactor-from-landuse preprocessing path. `external` mode uses
+# pre-computed rasters and never reaches it.
 
 from pydantic import BaseModel, field_validator, ConfigDict
 
-from pywatemsedem.catchment import Catchment
-from pywatemsedem.cfactor import create_cfactor_degerick2015
+def _load_pywatemsedem():
+    """Import pywatemsedem on first actual use, not at module import."""
+    import pywatemsedem.geo.utils as _utils
+    _utils.clean_up_tempfiles = lambda *args, **kwargs: None
+    from pywatemsedem.catchment import Catchment
+    from pywatemsedem.cfactor import create_cfactor_degerick2015
+    return Catchment, create_cfactor_degerick2015
 
 from raster_calculations import compute_ls
 from compute_dtm import (
@@ -374,6 +381,7 @@ def load_inputs(cfg: Config):
                                      fill=0, all_touched=False, dtype="uint8")
 
                 epsg = data["meta"]["crs"].to_epsg()
+                Catchment, create_cfactor_degerick2015 = _load_pywatemsedem()
                 catch = Catchment(
                     name=cfg.catchment_name, vct_catchment=cat_src, rst_dtm=dtm_src,
                     resolution=cell_size, epsg_code=epsg, nodata=0, results_folder=Path(rdir),

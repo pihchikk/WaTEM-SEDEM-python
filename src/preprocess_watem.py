@@ -14,7 +14,10 @@ from shapely.geometry import LineString, Polygon
 from affine import Affine
 import logging
 
-from pywatemsedem.catchment   import Catchment
+# lazy, same reason as compute_dtm.py
+def _catchment_cls():
+    from pywatemsedem.catchment import Catchment
+    return Catchment
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ def preprocess_all(
     logger.info("Output folders: rasters→%s, tables→%s", rd, sd)
 
     # Catchment
-    catch = Catchment(
+    catch = _catchment_cls()(
         name           = cfg["catchment_name"],
         vct_catchment  = raw_dir / ri["catchment"],
         rst_dtm        = raw_dir / ri["elevation"],
