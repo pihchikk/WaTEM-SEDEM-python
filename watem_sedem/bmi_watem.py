@@ -6,8 +6,8 @@ import numpy as np
 from bmipy import Bmi
 from numpy.typing import NDArray
 
-import data_loader # core module
-from lateraldistribution import topo_order, compute_erosion
+from watem_sedem import data_loader # core module
+from watem_sedem.lateraldistribution import topo_order, compute_erosion
 
 logger = logging.getLogger(__name__)
 

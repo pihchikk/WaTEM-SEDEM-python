@@ -15,13 +15,11 @@ import numpy as np
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-SRC = REPO_ROOT / "src"
-sys.path.insert(0, str(SRC))
 
-import lateraldistribution as ld  # noqa: E402
-import bmi_watem  # noqa: E402
-import coupling_drivers as cd  # noqa: E402
-from bmi_watem import BmiWaTEM  # noqa: E402
+from watem_sedem import bmi_watem
+from watem_sedem import coupling_drivers as cd
+from watem_sedem import lateraldistribution as ld
+from watem_sedem.bmi_watem import BmiWaTEM
 
 CONFIG_PATH = str(REPO_ROOT / "config.yaml")
 

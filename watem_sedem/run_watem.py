@@ -9,8 +9,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import rasterio
 
-from data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
-from lateraldistribution import topo_order, compute_erosion
+from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
+from watem_sedem.lateraldistribution import topo_order, compute_erosion
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 for _lib in ("rasterio", "fiona", "numexpr"):

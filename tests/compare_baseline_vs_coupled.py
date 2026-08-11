@@ -35,11 +35,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import rasterio
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
-
-import data_loader  # noqa: E402
-import coupling_drivers as cd  # noqa: E402
-from bmi_watem import BmiWaTEM  # noqa: E402
+from watem_sedem import coupling_drivers as cd
+from watem_sedem import data_loader
+from watem_sedem.bmi_watem import BmiWaTEM
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 OUTDIR = REPO_ROOT / "tests" / "tests_epoch_coupling"

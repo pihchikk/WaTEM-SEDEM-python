@@ -40,15 +40,15 @@ def _load_pywatemsedem():
     from pywatemsedem.cfactor import create_cfactor_degerick2015
     return Catchment, create_cfactor_degerick2015
 
-from raster_calculations import compute_ls
-from compute_dtm import (
+from watem_sedem.raster_calculations import compute_ls
+from watem_sedem.compute_dtm import (
     compute_slope,
     compute_aspect,
     compute_flow_accumulation,
     compute_slope_length,
     compute_flow_direction,
 )
-from preprocess_watem import preprocess_all, _ensure_int16_categorical
+from watem_sedem.preprocess_watem import preprocess_all, _ensure_int16_categorical
 
 
 # ── logging ────────────────────────────────────────────────────────────────────
