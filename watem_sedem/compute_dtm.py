@@ -145,7 +145,11 @@ def compute_flow_accumulation(elevation: np.ndarray, cell_size: float) -> np.nda
 def compute_flow_direction(elevation: np.ndarray, cell_size: float) -> np.ndarray:
     """
     D8 flow direction via SAGA 'Channel Network and Drainage Basins' (ta_channels, tool 5).
-    Output int16: 1–8 for directions, -1 for nodata/no-flow.
+    Output int16: 0-7 for directions (0 = N, then clockwise), -1 for nodata/no-flow.
+
+    SAGA's DIRECTION grid is 0-7 with 255 for nodata -- verified against the raw
+    .sdat, not assumed. That is already the convention compute_erosion()'s dr/dc
+    tables index by, so codes pass through unchanged.
     """
     dem_tif = _write_temp_dem(elevation, cell_size)
     dem_path = Path(dem_tif)
@@ -168,8 +172,12 @@ def compute_flow_direction(elevation: np.ndarray, cell_size: float) -> np.ndarra
         mask = np.isfinite(elevation)
         arr = np.where(mask, arr, -1).astype(np.int16, copy=False)
 
-        # sanitize: valid D8 codes 1..8 only; else -1
-        bad = (arr < 1) | (arr > 8)
+        # sanitize: valid D8 codes 0..7 only; else -1 (SAGA writes 255 for nodata).
+        # This used to read (arr < 1) | (arr > 8), which discarded every cell
+        # draining due north (code 0) -- ~6% of the catchment on the lom
+        # reference dataset -- turning each into an artificial sink that
+        # swallowed all sediment routed into it.
+        bad = (arr < 0) | (arr > 7)
         arr[bad] = -1
 
     except subprocess.CalledProcessError as e:
