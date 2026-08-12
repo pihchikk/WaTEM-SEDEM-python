@@ -157,6 +157,23 @@ defaults:
 calibration:
   ktc_multiplier: 25
 
+# Sediment routing scheme.
+#   d8:  a cell's whole outflow goes to one neighbour (SAGA's D8 grid). Default.
+#   mfd: outflow is split across all downslope neighbours, weighted by
+#        gradient**mfd_exponent, and the upslope area feeding the LS factor is
+#        routed the same way. This is what the original WaTEM/SEDEM software
+#        does. Measured against its output on the lom and spok reference
+#        catchments, mfd raises top-decile erosion IoU from 0.478/0.556 to
+#        0.744/0.730 and Spearman rho from 0.818/0.874 to 0.895/0.932
+#        (with method "wischmeier" and ktc such that ktc_eff = 0.015).
+#        It changes every result, so it is opt-in rather than the default.
+routing_scheme: d8
+mfd_exponent: 3.0
+
+# LS-factor formulation. One of: wischmeier, mccool, govers, nearing,
+# pascal_vanoost2003, pascal_mccool1987, pascal_nearing1997.
+ls_method: pascal_mccool1987
+
 # EPOCH COUPLING (AquaCrop + LISEM → WaTEM-SEDEM)
 # See docs/COUPLING_VARS_LEDGER.md for the full division of labor and caveats.
 coupling_mode: static

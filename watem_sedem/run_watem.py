@@ -11,6 +11,7 @@ import rasterio
 
 from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
 from watem_sedem.lateraldistribution import topo_order, compute_erosion
+from watem_sedem.mfd import route_mfd
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 for _lib in ("rasterio", "fiona", "numexpr"):
@@ -57,6 +58,53 @@ def write_raster(name: str, arr: np.ndarray, meta: dict, outdir: str, fmt: str) 
         dst.write(arr, 1)
     logger.info("wrote %s -> %s", name, path)
 
+def _solve_mfd(cfg, data):
+    """Multi-directional counterpart of compute_erosion().
+
+    Same per-cell RUSLE and transport-capacity expressions as compute_cell();
+    only the routing differs, so any change to the physics has to be made in
+    both places. Kept as a separate path rather than folded into
+    compute_erosion() because that one is driven by a D8 code per cell and has
+    no way to express a split outflow.
+    """
+    bd   = data["bulk-density"]
+    res  = data["cell_size"]
+    area = res ** 2
+
+    LS = np.nan_to_num(np.asarray(data["LS-factor"], dtype=float), nan=0.0,
+                       posinf=0.0, neginf=0.0)
+    C  = np.nan_to_num(np.asarray(data["Cfactor"], dtype=float))
+    K  = np.nan_to_num(np.asarray(data["Kfactor"], dtype=float)) / 1000.0
+    P  = np.nan_to_num(np.asarray(data["Pfactor"], dtype=float))
+    ktc = np.nan_to_num(np.asarray(data["ktc"], dtype=float)) / 1000.0
+    slope = np.asarray(data["slope"], dtype=float)
+
+    # compute_cell() reads the slope raster as degrees while compute_ls() reads
+    # the same array as radians. Mirrored here rather than silently corrected:
+    # on the reference catchments the two readings score the same, so the data
+    # does not say which is intended, and diverging from compute_cell() would
+    # make d8 and mfd disagree for a second, unrelated reason.
+    slope_rad = np.deg2rad(slope)
+
+    rusle_kg_m2 = data["Rfactor"] * C * P * K * LS * 0.1
+    ero_pot = np.nan_to_num(rusle_kg_m2 * area / bd)
+
+    slope_term = LS - 0.6 * 6.86 * np.tan(slope_rad) ** 0.8
+    cap_kg = ktc * rusle_kg_m2 * np.where(slope_term > 0, slope_term, 1.0) * area
+    cap_kg = np.maximum(np.nan_to_num(cap_kg), 0.0)
+    distcorr = area * (np.abs(np.sin(slope_rad)) + np.abs(np.cos(slope_rad)))
+    cap_m3 = np.nan_to_num(cap_kg * distcorr / bd)
+
+    elevation = np.asarray(
+        data["elevation"].filled(np.nan) if np.ma.isMaskedArray(data["elevation"])
+        else data["elevation"], dtype=float)
+
+    logger.info("routing multi-directionally (exponent %.2f)", cfg.mfd_exponent)
+    SEDI_IN, SEDI_OUT, WATEREROS = route_mfd(
+        ero_pot, cap_m3, elevation, res, cfg.mfd_exponent)
+    return SEDI_IN, SEDI_OUT, WATEREROS, cap_m3
+
+
 def main() -> None:
     args = parse_args()
 
@@ -96,13 +144,16 @@ def main() -> None:
     data["flow_direction"] = fdir
 
 
-    topo = topo_order(data["flow_direction"])
-    SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY = compute_erosion(
-        LS=data["LS-factor"], Kfactor=data["Kfactor"], Cfactor=data["Cfactor"],
-        Pfactor=data["Pfactor"], R_factor=data["Rfactor"], bulk_density=data["bulk-density"],
-        slope=data["slope"], aspect=data["aspect"], ktc=data["ktc"],
-        cell_res=data["cell_size"], flow_direction=data["flow_direction"], topo=topo
-    )
+    if cfg.routing_scheme == "mfd":
+        SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY = _solve_mfd(cfg, data)
+    else:
+        topo = topo_order(data["flow_direction"])
+        SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY = compute_erosion(
+            LS=data["LS-factor"], Kfactor=data["Kfactor"], Cfactor=data["Cfactor"],
+            Pfactor=data["Pfactor"], R_factor=data["Rfactor"], bulk_density=data["bulk-density"],
+            slope=data["slope"], aspect=data["aspect"], ktc=data["ktc"],
+            cell_res=data["cell_size"], flow_direction=data["flow_direction"], topo=topo
+        )
 
     # unit conversion
     cell_area = data["cell_size"] ** 2

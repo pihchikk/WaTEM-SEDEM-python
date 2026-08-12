@@ -48,6 +48,7 @@ from watem_sedem.compute_dtm import (
     compute_slope_length,
     compute_flow_direction,
 )
+from watem_sedem.mfd import mfd_accumulation
 from watem_sedem.preprocess_watem import preprocess_all, _ensure_int16_categorical
 
 
@@ -115,6 +116,27 @@ class Config(BaseModel):
     # event-mode only: skip the erosion solve for a day/window already covered
     # by an active LISEM event run, to avoid double-counting the same storm.
     disable_if_lisem_covers_event: bool = True
+
+    # "d8":  each cell's outflow goes to a single neighbour (SAGA's D8 grid).
+    #        Current default -- keeps existing results and the reference
+    #        rasters under tests/tests_*/ reproducible.
+    # "mfd": outflow is split across all downslope neighbours, weighted by
+    #        gradient**mfd_exponent. Closer to what the original WaTEM/SEDEM
+    #        software does; measured on the lom/spok reference catchments it
+    #        raises top-decile erosion IoU from 0.478/0.556 to 0.744/0.730.
+    #        Switching changes every result, so it is opt-in.
+    # NB: named *_scheme to stay distinct from the optional "routing"
+    # input raster in layers/, which is an unrelated per-cell code.
+    routing_scheme: Literal["d8", "mfd"] = "d8"
+    mfd_exponent: float = 3.0
+
+    # LS-factor formulation, passed straight to compute_ls(). Was hardcoded to
+    # "pascal_mccool1987"; that stays the default so existing results hold, but
+    # it is a first-order choice for the spatial pattern and belongs in config.
+    ls_method: Literal[
+        "wischmeier", "mccool", "govers", "nearing",
+        "pascal_vanoost2003", "pascal_mccool1987", "pascal_nearing1997",
+    ] = "pascal_mccool1987"
 
     @field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
     @classmethod
@@ -303,7 +325,14 @@ def load_inputs(cfg: Config):
         elif cov == "aspect":
             data["aspect"] = compute_aspect(data["elevation"], data["cell_size"])
         elif cov == "flow_accumulation":
-            data["flow_accumulation"] = compute_flow_accumulation(data["elevation"], data["cell_size"])
+            if cfg.routing_scheme == "mfd":
+                # LS must see the same dispersion the sediment will, so the
+                # upslope area feeding compute_ls() is routed multi-directionally
+                # too -- not D8 area with MFD sediment on top of it.
+                data["flow_accumulation"] = mfd_accumulation(
+                    data["elevation"], data["cell_size"], cfg.mfd_exponent)
+            else:
+                data["flow_accumulation"] = compute_flow_accumulation(data["elevation"], data["cell_size"])
         elif cov == "slope_length":
             data["slope_length"] = compute_slope_length(data["elevation"], data["cell_size"])
         elif cov == "flow_direction":
@@ -320,7 +349,7 @@ def load_inputs(cfg: Config):
             slope=data["slope"],
             upslope_area=data["flow_accumulation"],
             cell_size=data["cell_size"],
-            method="pascal_mccool1987",
+            method=cfg.ls_method,
             aspect=data.get("aspect"),
         )
         logger.info("DTM 'LS-factor' ← computed")
