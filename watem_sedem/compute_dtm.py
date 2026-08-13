@@ -193,18 +193,21 @@ def compute_flow_direction(elevation: np.ndarray, cell_size: float) -> np.ndarra
 
 
 def compute_slope_length(elevation: np.ndarray, cell_size: float) -> np.ndarray:
-    """
-    Approximate slope length via SAGA ta_channels tool 1. If SAGA fails,
-    fallback to sqrt(flow_accumulation * cell_size).
+    """Slope length (m) via SAGA ta_hydrology tool 7.
+
+    This used to call ta_channels tool 1, which is "Watershed Basins" and has
+    neither a -SLOPE_LENGTH output nor a -THRESHOLD argument, so the call failed
+    on every run and silently fell through to the sqrt(fac * cell_size)
+    approximation below. Nothing noticed because the LS methods in use do not
+    read slope_length -- but any method that does would have been fed the
+    fallback without a word.
     """
     dem_tif = _write_temp_dem(elevation, cell_size)
     out_root = dem_tif.replace(".tif", "_sl")
 
     try:
-        _run_saga("ta_channels", "1",
-                  ["-DEM", dem_tif, "-SLOPE_LENGTH", out_root, "-THRESHOLD", "1"])
-        arr = _read_and_clean(out_root, force_dtype="float32")
-        return arr
+        _run_saga("ta_hydrology", "7", ["-DEM", dem_tif, "-LENGTH", out_root])
+        return _read_and_clean(out_root, force_dtype="float32")
 
     except subprocess.CalledProcessError:
         logger.warning("SAGA slope-length failed; using sqrt(fac*cell_size) fallback")
