@@ -91,3 +91,63 @@ The `mccool` branch in `raster_calculations.compute_ls()` is *not* the right one
 despite the name: its L is `(A/22.13)**0.4` with A an upslope **area** in m² and
 a fixed exponent, where McCool's L is `(Xh/22.13)**m` with Xh a slope **length**
 and m variable.
+
+## Where the remaining disagreement is: the talweg
+
+Sign agreement of ~96% understates the problem. On `lom` the 37 disagreeing
+cells carry **31.5% of the reference's total erosion mass**, and the direction is
+one-sided: of the 36 largest reference cells, 23 disagree and all 23 are
+"reference deposits, we erode". The reference has 51 deposition cells against
+our 22. We fail to deposit exactly where deposition matters — the main talweg.
+
+Four explanations were tested against the data and rejected:
+
+  the `deg2rad` on an already-radian slope raster in `compute_cell()` (23 -> 22
+  disagreeing large cells, i.e. nothing);
+
+  the `cap_kg_raw if > 0 else ktc*rusle*area` fallback when `slope_term` goes
+  negative (no change at all);
+
+  parcel-bounded routing, i.e. restricting the domain to the crop polygon, on
+  the theory that the software deposits sediment at the field edge — this
+  produced *fewer* depositions, 16 against 22;
+
+  dropping C, P and the surplus LS from the capacity expression to match the
+  published `TC = kTC·R·K·(LS − 6.86·(sinθ)^0.8·0.6)` — also fewer depositions,
+  13 against 22, and more large-cell disagreement.
+
+What does explain it is the magnitude of transport capacity. Lowering the
+effective ktc from 0.25 to 0.05:
+
+| | large cells with wrong sign | deposition cells | sign | rho |
+| --- | --- | --- | --- | --- |
+| lom, ktc 0.25 | 23/36 | 22 (ref 51) | 0.964 | 0.865 |
+| lom, ktc 0.05 | 8/36 | 48 (ref 51) | 0.980 | 0.909 |
+| spok, ktc 0.25 | 43/87 | 31 (ref 112) | 0.967 | 0.925 |
+| spok, ktc 0.05 | 16/87 | 134 (ref 112) | 0.969 | 0.943 |
+
+Mass carried by wrong-sign cells on lom falls from 31.5% to 11.7%. At ktc 0.02
+the large cells are nearly perfect (4/36, 2/87) but deposition is over-produced
+threefold, so the useful range is 0.02–0.05.
+
+**0.05 is fitted, not read off the software's settings**, and it cannot be
+derived from them, because the units do not correspond:
+
+```python
+area     = cell_res**2                            # m2
+cap_kg   = ktc * rusle_kg_m2 * slope_term * area  # kg
+distcorr = area * (abs(sin) + abs(cos))           # m2   <- surplus area
+cap_m3   = cap_kg * distcorr / bulk_density       # kg*m2/(kg/m3) = m5, not m3
+```
+
+`distcorr` should be the dimensionless `abs(sin) + abs(cos)`; as written it
+carries an extra factor of cell area (400 m² on lom), and `cap_m3` is not a
+volume. Compounding this, WaTEM/SEDEM's ktc has units of length (metres) —
+TC is a flux per unit width — while ours is treated as dimensionless.
+
+So the software's kTc = 250 has no defensible mapping onto our ktc, and the
+earlier attempt to use 0.25 for it was meaningless from the start. The order of
+work is: fix the dimensions first, then re-anchor ktc against 250 on units that
+mean something. That changes every result by roughly the cell area, so it is not
+a change to make quietly — hence documented here rather than applied to the
+defaults.
