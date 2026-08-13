@@ -200,3 +200,48 @@ them; `sin` is used because that is the published form.
 What is still open: the largest cells. 8 of lom's 36 biggest reference cells and
 13 of spok's 87 still carry the wrong sign, all in the same direction — the
 software deposits in the talweg and we do not, only less often than before.
+
+
+## Identified: the router is Desmet & Govers aspect decomposition
+
+"По нескольким" left the algorithm open, so all the plausible ones were run
+against the references with every other parameter held at the software's
+settings. Ranked by Spearman rho, on both catchments at once:
+
+| scheme | lom rho | lom sign | lom dep/GT | lom bad | lom mass | spok rho | spok sign | spok dep/GT | spok bad | spok mass |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| **Desmet & Govers** | **0.945** | **0.986** | **51/51** | **1/36** | **1.0%** | **0.979** | **0.992** | **107/112** | **3/87** | **0.9%** |
+| Quinn 1991 | 0.931 | 0.982 | 52/51 | 2/36 | 2.4% | 0.966 | 0.985 | 97/112 | 6/87 | 2.2% |
+| Holmgren p=1 | 0.930 | 0.981 | 51/51 | 3/36 | 2.6% | 0.964 | 0.984 | 93/112 | 8/87 | 2.7% |
+| Freeman p=1.1 | 0.930 | 0.980 | 50/51 | 4/36 | 2.9% | 0.963 | 0.984 | 93/112 | 8/87 | 2.7% |
+| Holmgren p=3 | 0.919 | 0.975 | 43/51 | 8/36 | 8.2% | 0.960 | 0.982 | 77/112 | 13/87 | 3.9% |
+| D-infinity | 0.917 | 0.978 | 38/51 | 8/36 | 12.0% | 0.949 | 0.981 | 79/112 | 14/87 | 4.6% |
+| D8 | 0.850 | 0.976 | 34/51 | 10/36 | 9.1% | 0.883 | 0.976 | 66/112 | 26/87 | 8.2% |
+
+Desmet & Govers is first on every column of both catchments. It reproduces the
+deposition-cell count exactly on lom (51 against 51), puts the median ratio at
+1.00 on both, and leaves 1.0% and 0.9% of the reference's erosion mass in
+wrong-sign cells against D8's 9.1% and 8.2%. That is an identification, not a
+preference.
+
+Flow leaves a cell along its aspect and the vector is decomposed onto the two
+cardinal neighbours it lies between, weighted |cos(aspect)| north/south and
+|sin(aspect)| east/west, normalised by their sum -- the same |sin| + |cos| that
+already appears as the flow-width normaliser in the transport capacity and in
+Desmet & Govers' own L factor. In hindsight it was sitting in the code all along.
+
+`routing_scheme` now defaults to `desmet_govers`; `holmgren` (with
+`mfd_exponent`) and `d8` remain available.
+
+Final state against all three references, every parameter from the software,
+nothing fitted:
+
+| | median model | median GT | ratio | Spearman rho | sign | deposition (ours/GT) | wrong-sign mass |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| lom | −11.79 | −11.45 | 1.00 | 0.945 | 0.986 | 51 / 51 | 1.0% |
+| spok | −7.38 | −7.55 | 1.00 | 0.979 | 0.992 | 107 / 112 | 0.9% |
+| lokna | −4.20 | −4.06 | 1.01 | 0.910 | 0.955 | 4028 / 2705 | 4.4% |
+
+lokna stays the weakest of the three, and it is the one whose reference grid has
+to be resampled to compare at all; its deposition count also overshoots by half
+again, which the other two do not.

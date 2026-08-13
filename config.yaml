@@ -172,8 +172,8 @@ calibration:
 #        0.744/0.730 and Spearman rho from 0.818/0.874 to 0.895/0.932
 #        The modeller who produced those references confirmed the desktop
 #        software spreads flow over several directions, so mfd is the default.
-routing_scheme: mfd
-mfd_exponent: 3.0
+routing_scheme: desmet_govers
+mfd_exponent: 1.0
 
 # LS-factor formulation. One of: wischmeier, mccool, govers, nearing,
 # pascal_vanoost2003, pascal_mccool1987, pascal_nearing1997.

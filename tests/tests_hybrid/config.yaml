@@ -83,8 +83,8 @@ calibration:
   ktc_low: 75
   ktc_high: 250
   ktc_limit: 0.1
-routing_scheme: mfd
-mfd_exponent: 3.0
+routing_scheme: desmet_govers
+mfd_exponent: 1.0
 ls_method: pascal_mccool1987
 coupling_mode: static
 flow_direction_source: internal

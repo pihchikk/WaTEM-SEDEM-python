@@ -11,7 +11,7 @@ import rasterio
 
 from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
 from watem_sedem.lateraldistribution import topo_order, compute_erosion, transport_capacity
-from watem_sedem.mfd import route_mfd
+from watem_sedem import mfd
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 for _lib in ("rasterio", "fiona", "numexpr"):
@@ -59,7 +59,7 @@ def write_raster(name: str, arr: np.ndarray, meta: dict, outdir: str, fmt: str) 
     logger.info("wrote %s -> %s", name, path)
 
 def _solve_mfd(cfg, data):
-    """Multi-directional counterpart of compute_erosion().
+    """Weight-based counterpart of compute_erosion(), for every scheme but d8.
 
     Same per-cell RUSLE and transport-capacity expressions as compute_cell() --
     both call transport_capacity() so the physics lives in one place -- and only
@@ -89,9 +89,11 @@ def _solve_mfd(cfg, data):
         data["elevation"].filled(np.nan) if np.ma.isMaskedArray(data["elevation"])
         else data["elevation"], dtype=float)
 
-    logger.info("routing multi-directionally (exponent %.2f)", cfg.mfd_exponent)
-    SEDI_IN, SEDI_OUT, WATEREROS = route_mfd(
-        ero_pot, cap_m3, elevation, res, cfg.mfd_exponent)
+    w, has_out = mfd.weights(elevation, res, scheme=cfg.routing_scheme,
+                             aspect=aspect, exponent=cfg.mfd_exponent)
+    logger.info("routing: %s%s", cfg.routing_scheme,
+                f" (exponent {cfg.mfd_exponent:g})" if cfg.routing_scheme == "holmgren" else "")
+    SEDI_IN, SEDI_OUT, WATEREROS = mfd.route(w, has_out, ero_pot, cap_m3, elevation, res)
     return SEDI_IN, SEDI_OUT, WATEREROS, cap_m3
 
 
@@ -147,7 +149,7 @@ def main() -> None:
     data["flow_direction"] = fdir
 
 
-    if cfg.routing_scheme == "mfd":
+    if cfg.routing_scheme != "d8":
         SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY = _solve_mfd(cfg, data)
     else:
         topo = topo_order(data["flow_direction"])

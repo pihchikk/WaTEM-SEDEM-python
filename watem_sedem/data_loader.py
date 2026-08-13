@@ -48,7 +48,7 @@ from watem_sedem.compute_dtm import (
     compute_slope_length,
     compute_flow_direction,
 )
-from watem_sedem.mfd import mfd_accumulation
+from watem_sedem import mfd
 from watem_sedem.preprocess_watem import preprocess_all, _ensure_int16_categorical
 
 
@@ -139,8 +139,9 @@ class Config(BaseModel):
     #        Switching changes every result, so it is opt-in.
     # NB: named *_scheme to stay distinct from the optional "routing"
     # input raster in layers/, which is an unrelated per-cell code.
-    routing_scheme: Literal["d8", "mfd"] = "mfd"
-    mfd_exponent: float = 3.0
+    routing_scheme: Literal["desmet_govers", "holmgren", "d8"] = "desmet_govers"
+    # holmgren only: 1 = Quinn et al. (1991), 1.1 = Freeman (1991), large -> D8.
+    mfd_exponent: float = 1.0
 
     # LS-factor formulation, passed straight to compute_ls(). Was hardcoded to
     # "pascal_mccool1987"; that stays the default so existing results hold, but
@@ -337,14 +338,19 @@ def load_inputs(cfg: Config):
         elif cov == "aspect":
             data["aspect"] = compute_aspect(data["elevation"], data["cell_size"])
         elif cov == "flow_accumulation":
-            if cfg.routing_scheme == "mfd":
-                # LS must see the same dispersion the sediment will, so the
-                # upslope area feeding compute_ls() is routed multi-directionally
-                # too -- not D8 area with MFD sediment on top of it.
-                data["flow_accumulation"] = mfd_accumulation(
-                    data["elevation"], data["cell_size"], cfg.mfd_exponent)
-            else:
-                data["flow_accumulation"] = compute_flow_accumulation(data["elevation"], data["cell_size"])
+            # LS must see the same flow field the sediment will, so the upslope
+            # area feeding compute_ls() is accumulated under the same weights.
+            if "aspect" not in data and cfg.routing_scheme == "desmet_govers":
+                data["aspect"] = compute_aspect(data["elevation"], data["cell_size"])
+            elev = (data["elevation"].filled(np.nan)
+                    if np.ma.isMaskedArray(data["elevation"]) else data["elevation"])
+            w, has_out = mfd.weights(np.asarray(elev, dtype=float), data["cell_size"],
+                                     scheme=cfg.routing_scheme,
+                                     aspect=np.asarray(data.get("aspect"), dtype=float)
+                                     if data.get("aspect") is not None else None,
+                                     exponent=cfg.mfd_exponent)
+            data["flow_accumulation"] = mfd.accumulate(
+                w, has_out, np.asarray(elev, dtype=float), data["cell_size"])
         elif cov == "slope_length":
             data["slope_length"] = compute_slope_length(data["elevation"], data["cell_size"])
         elif cov == "flow_direction":
