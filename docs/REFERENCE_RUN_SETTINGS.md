@@ -54,6 +54,21 @@ for erosion, no fitted scale factor anywhere:
 | lom, mfd | −10.88 | −11.45 | 1.12 | 0.865 | 0.964 |
 | spok, d8 | −5.70 | −7.55 | 1.19 | 0.845 | 0.965 |
 | spok, mfd | −7.15 | −7.55 | 1.04 | 0.925 | 0.967 |
+| lokna, d8 | −3.63 | −4.06 | 1.10 | 0.873 | 0.949 |
+| lokna, mfd | −3.97 | −4.06 | 1.05 | 0.896 | 0.949 |
+
+`lokna` arrived after the settings above were already fixed on `lom` and
+`spok`, and was run without touching them -- a different landscape, a 30 m SRTM
+DEM instead of a 20 m one, its own R/C/K, and 114862 compared cells against
+~1000-2500. It is the only one of the three whose reference grid is not a window
+of its DEM grid (2.5/9.48-cell offset, 29.938 m against 30.0 m), so the model
+output is resampled onto the reference grid with nearest neighbour before
+comparison -- no smoothing, so the agreement is not flattered by the resampling.
+
+Top-decile IoU is not comparable across these three: on lokna the top decile is
+11486 cells against roughly 100-250 on the others, so the same score is a much
+harder target. Median ratio and Spearman rho are the figures to read across
+datasets.
 
 Catchment totals run high: −3495 vs −2875 on lom, −16492 vs −11416 on spok. The
 medians agree to 4–12% while the sums do not, which locates the remaining
