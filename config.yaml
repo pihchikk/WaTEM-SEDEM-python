@@ -152,22 +152,27 @@ defaults:
   Pfactor:      1          # dimensionless
   Rfactor:      350.0      # MJ·mm·ha⁻¹·h⁻¹·yr⁻¹
   bulk-density: 1300.0     # kg·m⁻³
-  ktc:          1          # dimensionless
+  ktc:          250        # metres (overridden by calibration.ktc_low/high)
 
 calibration:
-  ktc_multiplier: 25
+  # Transport-capacity coefficients, in METRES. ktc_limit is a threshold on the
+  # C factor, not a coefficient: cells with C below it use ktc_low, the rest
+  # ktc_high. These are the WaTEM/SEDEM desktop defaults.
+  ktc_low:   75
+  ktc_high:  250
+  ktc_limit: 0.1
 
 # Sediment routing scheme.
-#   d8:  a cell's whole outflow goes to one neighbour (SAGA's D8 grid). Default.
+#   d8:  a cell's whole outflow goes to one neighbour (SAGA's D8 grid).
 #   mfd: outflow is split across all downslope neighbours, weighted by
 #        gradient**mfd_exponent, and the upslope area feeding the LS factor is
 #        routed the same way. This is what the original WaTEM/SEDEM software
 #        does. Measured against its output on the lom and spok reference
 #        catchments, mfd raises top-decile erosion IoU from 0.478/0.556 to
 #        0.744/0.730 and Spearman rho from 0.818/0.874 to 0.895/0.932
-#        (with method "wischmeier" and ktc such that ktc_eff = 0.015).
-#        It changes every result, so it is opt-in rather than the default.
-routing_scheme: d8
+#        The modeller who produced those references confirmed the desktop
+#        software spreads flow over several directions, so mfd is the default.
+routing_scheme: mfd
 mfd_exponent: 3.0
 
 # LS-factor formulation. One of: wischmeier, mccool, govers, nearing,

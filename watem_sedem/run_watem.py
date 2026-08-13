@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 import rasterio
 
 from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
-from watem_sedem.lateraldistribution import topo_order, compute_erosion
+from watem_sedem.lateraldistribution import topo_order, compute_erosion, transport_capacity
 from watem_sedem.mfd import route_mfd
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
@@ -61,11 +61,10 @@ def write_raster(name: str, arr: np.ndarray, meta: dict, outdir: str, fmt: str) 
 def _solve_mfd(cfg, data):
     """Multi-directional counterpart of compute_erosion().
 
-    Same per-cell RUSLE and transport-capacity expressions as compute_cell();
-    only the routing differs, so any change to the physics has to be made in
-    both places. Kept as a separate path rather than folded into
-    compute_erosion() because that one is driven by a D8 code per cell and has
-    no way to express a split outflow.
+    Same per-cell RUSLE and transport-capacity expressions as compute_cell() --
+    both call transport_capacity() so the physics lives in one place -- and only
+    the routing differs. Kept separate because compute_erosion() is driven by a
+    single D8 code per cell and cannot express a split outflow.
     """
     bd   = data["bulk-density"]
     res  = data["cell_size"]
@@ -74,26 +73,17 @@ def _solve_mfd(cfg, data):
     LS = np.nan_to_num(np.asarray(data["LS-factor"], dtype=float), nan=0.0,
                        posinf=0.0, neginf=0.0)
     C  = np.nan_to_num(np.asarray(data["Cfactor"], dtype=float))
-    K  = np.nan_to_num(np.asarray(data["Kfactor"], dtype=float)) / 1000.0
+    K  = np.nan_to_num(np.asarray(data["Kfactor"], dtype=float))
     P  = np.nan_to_num(np.asarray(data["Pfactor"], dtype=float))
-    ktc = np.nan_to_num(np.asarray(data["ktc"], dtype=float)) / 1000.0
-    slope = np.asarray(data["slope"], dtype=float)
+    ktc = np.nan_to_num(np.asarray(data["ktc"], dtype=float))
+    slope  = np.asarray(data["slope"], dtype=float)     # radians
+    aspect = np.asarray(data["aspect"], dtype=float)
 
-    # compute_cell() reads the slope raster as degrees while compute_ls() reads
-    # the same array as radians. Mirrored here rather than silently corrected:
-    # on the reference catchments the two readings score the same, so the data
-    # does not say which is intended, and diverging from compute_cell() would
-    # make d8 and mfd disagree for a second, unrelated reason.
-    slope_rad = np.deg2rad(slope)
-
-    rusle_kg_m2 = data["Rfactor"] * C * P * K * LS * 0.1
+    rusle_kg_m2 = data["Rfactor"] * C * P * K * LS / 1e4
     ero_pot = np.nan_to_num(rusle_kg_m2 * area / bd)
 
-    slope_term = LS - 0.6 * 6.86 * np.tan(slope_rad) ** 0.8
-    cap_kg = ktc * rusle_kg_m2 * np.where(slope_term > 0, slope_term, 1.0) * area
-    cap_kg = np.maximum(np.nan_to_num(cap_kg), 0.0)
-    distcorr = area * (np.abs(np.sin(slope_rad)) + np.abs(np.cos(slope_rad)))
-    cap_m3 = np.nan_to_num(cap_kg * distcorr / bd)
+    cap_kg = transport_capacity(LS, K, data["Rfactor"], slope, aspect, ktc, res)
+    cap_m3 = np.nan_to_num(np.maximum(cap_kg, 0.0) / bd)
 
     elevation = np.asarray(
         data["elevation"].filled(np.nan) if np.ma.isMaskedArray(data["elevation"])
@@ -126,8 +116,21 @@ def main() -> None:
         if not isinstance(data[key], np.ndarray):
             data[key] = np.full(shape, data[key], dtype=float)
 
-    m = cfg.calibration.ktc_multiplier
-    data["ktc"] = (data["ktc"].astype(float) if isinstance(data["ktc"], np.ndarray) else float(data["ktc"])) * m
+    # ktc is a length in metres. WaTEM/SEDEM picks ktc_low or ktc_high per cell
+    # by comparing the C factor against ktc_limit -- the "limit" is a threshold
+    # on C, not a coefficient. Cropland C is well above it, so arable catchments
+    # run entirely on ktc_high.
+    cfac = data["Cfactor"]
+    cvalid = ~np.ma.getmaskarray(cfac) if np.ma.isMaskedArray(cfac) else np.isfinite(np.asarray(cfac, dtype=float))
+    cfac = np.asarray(cfac, dtype=float)
+    cvalid &= np.isfinite(cfac) & (cfac > -9000)   # nodata fill values are not C values
+    data["ktc"] = np.where(cfac >= cfg.calibration.ktc_limit,
+                           cfg.calibration.ktc_high,
+                           cfg.calibration.ktc_low).astype(float)
+    logger.info("ktc: %.4g m below C=%.3g, %.4g m at or above (%.1f%% of cells high)",
+                cfg.calibration.ktc_low, cfg.calibration.ktc_limit,
+                cfg.calibration.ktc_high,
+                100.0 * np.mean(cfac[cvalid] >= cfg.calibration.ktc_limit) if cvalid.any() else 0.0)
 
     logger.debug(
         "shapes: %s",

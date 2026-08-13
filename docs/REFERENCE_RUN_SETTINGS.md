@@ -151,3 +151,52 @@ work is: fix the dimensions first, then re-anchor ktc against 250 on units that
 mean something. That changes every result by roughly the cell area, so it is not
 a change to make quietly — hence documented here rather than applied to the
 defaults.
+
+
+## Resolved: kTc is a length, and the software routes multi-directionally
+
+Both open questions were answered by the modeller.
+
+**kTc low and high are in metres**, and kTc limit is a C-factor threshold — cells
+with C at or above it take the high value. Their arable catchments therefore run
+on 250 m throughout.
+
+**The software spreads flow across several directions**, not one, "с выпуклого
+склона с верхней точки будет течь в разные стороны".
+
+Both confirm what the dimensional analysis above and the routing sweep had only
+suggested, so the code now follows the software rather than approximating it:
+
+  `transport_capacity()` in `lateraldistribution.py` computes
+  `TC = ktc · R · K · (LS − 0.6·6.86·|sin θ|^0.8) / 1e4` in kg m⁻¹ yr⁻¹ and
+  multiplies by the flow width `cell_res · (|sin(aspect)| + |cos(aspect)|)`.
+  Capacity is now a volume. The old expression multiplied by cell area twice
+  and took the width correction from the slope raster instead of aspect.
+
+  `compute_cell()` no longer applies `deg2rad` to an already-radian slope.
+
+  `calibration` carries `ktc_low: 75`, `ktc_high: 250`, `ktc_limit: 0.1` in
+  metres; `ktc_multiplier` is retained so old configs load but is not applied.
+
+  `routing_scheme` defaults to `mfd`.
+
+Against the three references, with every parameter taken from the software's
+settings and **nothing fitted**:
+
+| | median model | median GT | ratio | Spearman rho | sign | deposition cells (ours/GT) | wrong-sign mass |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| lom | −10.55 | −11.45 | 1.12 | 0.919 | 0.975 | 43 / 51 | 8.2% |
+| spok | −6.33 | −7.55 | 1.14 | 0.959 | 0.982 | 77 / 112 | 3.9% |
+| lokna | −3.94 | −4.06 | 1.05 | 0.902 | 0.954 | 3277 / 2705 | 5.3% |
+
+This beats the earlier fitted `ktc = 0.05` on every catchment — Spearman 0.909 →
+0.919, 0.943 → 0.959, 0.900 → 0.902, and wrong-sign mass on lom 11.7% → 8.2%,
+on spok 11.3% → 3.9%. The fitted number is gone from the model entirely.
+
+Using `sin` rather than `tan` in the capacity's steepness term changes results
+below the second decimal on both catchments, so the reference cannot distinguish
+them; `sin` is used because that is the published form.
+
+What is still open: the largest cells. 8 of lom's 36 biggest reference cells and
+13 of spok's 87 still carry the wrong sign, all in the same direction — the
+software deposits in the talweg and we do not, only less often than before.

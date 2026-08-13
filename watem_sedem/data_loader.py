@@ -76,6 +76,18 @@ class OutputConfig(BaseModel):
 
 
 class Calibration(BaseModel):
+    """Transport-capacity coefficients, in METRES.
+
+    WaTEM/SEDEM selects between two of them per cell by comparing the C factor
+    against ktc_limit; ktc_limit is that C threshold, not a coefficient. The
+    defaults are the desktop software's own (75 / 250 / 0.1).
+    """
+    ktc_low: float = 75.0
+    ktc_high: float = 250.0
+    ktc_limit: float = 0.1
+    # Retained so old configs still load. No longer applied: ktc used to be a
+    # dimensionless number scaled by this, which had no relation to the
+    # software's metres. See docs/REFERENCE_RUN_SETTINGS.md.
     ktc_multiplier: float = 1.0
 
 
@@ -127,7 +139,7 @@ class Config(BaseModel):
     #        Switching changes every result, so it is opt-in.
     # NB: named *_scheme to stay distinct from the optional "routing"
     # input raster in layers/, which is an unrelated per-cell code.
-    routing_scheme: Literal["d8", "mfd"] = "d8"
+    routing_scheme: Literal["d8", "mfd"] = "mfd"
     mfd_exponent: float = 3.0
 
     # LS-factor formulation, passed straight to compute_ls(). Was hardcoded to
