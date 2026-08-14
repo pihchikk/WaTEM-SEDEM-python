@@ -154,6 +154,14 @@ defaults:
   bulk-density: 1300.0     # kg·m⁻³
   ktc:          250        # metres (overridden by calibration.ktc_low/high)
 
+# Tillage erosion (the "T" in WaTEM). Off by default -- the reference rasters
+# under tests/ and in docs/REFERENCE_RUN_SETTINGS.md are water erosion only, so
+# turning this on makes runs incomparable with them. ktil is kg m-1; 600 is the
+# desktop software's default and the value its reference runs used.
+tillage:
+  enabled: false
+  ktil: 600
+
 calibration:
   # Transport-capacity coefficients, in METRES. ktc_limit is a threshold on the
   # C factor, not a coefficient: cells with C below it use ktc_low, the rest

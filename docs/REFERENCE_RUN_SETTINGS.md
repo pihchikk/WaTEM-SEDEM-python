@@ -245,3 +245,36 @@ nothing fitted:
 lokna stays the weakest of the three, and it is the one whose reference grid has
 to be resampled to compare at all; its deposition count also overshoots by half
 again, which the other two do not.
+
+
+## Tillage erosion: implemented, and deliberately not validated here
+
+The desktop settings carry a tillage transport coefficient (ktil = 600 kg m-1),
+but the modeller confirmed the reference rasters do not include tillage: "Нет,
+ее можно отдельно посчитать. Там сверху галка с граблями". So `erosion_soft_*.tif`
+is water erosion only, every comparison in this document is water-only, and the
+tillage implementation in `watem_sedem/tillage.py` has **no reference to check
+against**.
+
+It is off by default (`tillage.enabled: false`) for exactly that reason —
+switching it on makes a run incomparable with the stored references.
+
+Since it cannot be validated by comparison, it is checked by invariant instead.
+Tillage moves soil without creating or destroying it, so on a surface whose flux
+vanishes at the domain edge the net must cancel. `tests/test_tillage.py` asserts
+that to a relative 1e-9, plus: a cone's apex erodes and a bowl's floor fills, a
+uniform plane is pure transport with zero erosion anywhere on it (the classic
+tillage result, and the check that the divergence is not accidentally picking up
+slope rather than curvature), flat ground does nothing, and the result scales
+linearly with ktil.
+
+On the lom catchment with ktil = 600, tillage moves 3.03e6 kg/yr gross while the
+net is −1.5e4 kg/yr, 0.50% of gross — that residual is real export across the
+catchment boundary, not error. The signature is what distinguishes it from water
+erosion: 40.4% of cells gain soil under tillage against 3.9% under water, and
+the two fields correlate at −0.02, i.e. not at all. Gross magnitude comes to 39%
+of the water figure on this terrain.
+
+Validating it properly needs either a reference run with the rakes checkbox on,
+or field measurements (¹³⁷Cs inventories are the usual route). Worth asking for
+the former — it is one more run of software the modeller already has open.

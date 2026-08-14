@@ -91,6 +91,14 @@ class Calibration(BaseModel):
     ktc_multiplier: float = 1.0
 
 
+class Tillage(BaseModel):
+    """Tillage erosion -- WaTEM's "T". Off by default: the reference rasters
+    this package is checked against contain water erosion only, so enabling it
+    would make them incomparable. ktil is kg m-1; 600 is the desktop default."""
+    enabled: bool = False
+    ktil: float = 600.0
+
+
 class Config(BaseModel):
     model_config = ConfigDict(extra='ignore')
 
@@ -106,6 +114,7 @@ class Config(BaseModel):
     dtm_covariates: Dict[str, bool]
     output: OutputConfig
     calibration: Calibration
+    tillage: Tillage = Tillage()
     config_path: Optional[str] = None
     scenario_year: Optional[int] = None
     scenario_nr: Optional[int] = None

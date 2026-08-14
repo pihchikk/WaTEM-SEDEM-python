@@ -12,6 +12,7 @@ import rasterio
 from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
 from watem_sedem.lateraldistribution import topo_order, compute_erosion, transport_capacity
 from watem_sedem import mfd
+from watem_sedem.tillage import tillage_erosion, to_t_ha
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 for _lib in ("rasterio", "fiona", "numexpr"):
@@ -160,6 +161,26 @@ def main() -> None:
             cell_res=data["cell_size"], flow_direction=data["flow_direction"], topo=topo
         )
 
+    # Tillage erosion is a separate process on the same grid: it does not enter
+    # the sediment routing (ploughing moves soil across the surface, it does not
+    # hand it to the flow), so it is computed independently and written as its
+    # own raster plus a combined total.
+    TILLEROS = None
+    if cfg.tillage.enabled:
+        slope_arr = np.asarray(data["slope"], dtype=float)
+        aspect_arr = np.asarray(data["aspect"], dtype=float)
+        elev_arr = (data["elevation"].filled(np.nan)
+                    if np.ma.isMaskedArray(data["elevation"]) else data["elevation"])
+        valid = np.isfinite(np.asarray(elev_arr, dtype=float))
+        TILLEROS = tillage_erosion(slope_arr, aspect_arr, cfg.tillage.ktil,
+                                   data["cell_size"], valid=valid)
+        net = np.nansum(TILLEROS) * data["cell_size"] ** 2
+        gross = np.nansum(np.abs(TILLEROS)) * data["cell_size"] ** 2
+        logger.info("tillage: ktil %.4g kg/m, gross %.4g kg/yr moved, net %.3g kg/yr "
+                    "(%.2f%% of gross -- should be near zero, it is export across "
+                    "the boundary)", cfg.tillage.ktil, gross, net,
+                    100.0 * abs(net) / gross if gross else 0.0)
+
     # unit conversion
     cell_area = data["cell_size"] ** 2
     bd = data["bulk-density"]
@@ -200,6 +221,12 @@ def main() -> None:
         write_raster("SEDI_OUT",  sed_arr.astype(np.float32), meta, outdir, fmt)
         write_raster("CAPACITY",  cap_arr.astype(np.float32), meta, outdir, fmt)
         write_raster("WATEREROS", ero_arr.astype(np.float32), meta, outdir, fmt)
+        if TILLEROS is not None:
+            till = to_t_ha(TILLEROS) if eu == "t/ha" else TILLEROS * cell_area
+            write_raster("TILLEROS", np.asarray(till, dtype=np.float32), meta, outdir, fmt)
+            write_raster("TOTALEROS",
+                         np.asarray(ero_arr + np.nan_to_num(till), dtype=np.float32),
+                         meta, outdir, fmt)
 
     # quick plots if save_plots (save_p) is enabled
     sed_vmin, sed_vmax = np.nanpercentile(sed_arr, [2, 98])
