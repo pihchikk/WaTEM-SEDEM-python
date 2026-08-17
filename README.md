@@ -7,7 +7,16 @@ It can be used in two ways:
 - **As a command-line tool** via `watem-sedem` - to run directly using a config file.
 - **As a BMI module** (`from watem_sedem import BmiWaTEM`) - within a wrapper to integrate into larger model frameworks.
 
-**Note:** This is not a full-featured version. It supports a single default scenario with no tillage, strips, infrastructure, or multi-factor options. Modes control *input files configuration* only.
+**Note:** Not a full-featured version. Grass strips, infrastructure and
+multi-factor options are not implemented, and modes control *input file
+configuration* only. Tillage erosion **is** implemented (`tillage.enabled`,
+default off) but has no reference run to validate against — see
+`docs/REFERENCE_RUN_SETTINGS.md`.
+
+**Both entry points run the same solver** (`watem_sedem/solver.py`); the CLI and
+`BmiWaTEM` must agree byte for byte, which `tests/test_bmi_matches_cli.py`
+asserts. They once did not, and the divergence went unnoticed because nothing
+compared them.
 
 ---
 
@@ -171,8 +180,10 @@ Two coupling modes are available via `coupling_mode` in `config.yaml`:
 
 When both WaTEM-SEDEM and LISEM cover the same catchment, set
 `flow_direction_source: external` (with `external_flow_direction_path`) so both
-models route sediment over the same D8 topology instead of WaTEM-SEDEM deriving
-an independent, possibly inconsistent, flow grid.
+models route sediment over the same topology instead of WaTEM-SEDEM deriving an
+independent, possibly inconsistent, flow grid. Note that this ingests a *D8*
+grid, while the default routing is `desmet_govers` (see `routing_scheme`);
+supplying an external flow direction therefore also pins the scheme to `d8`.
 
 See `docs/COUPLING_VARS_LEDGER.md` for the full variable ledger, the LISEM/
 WaTEM-SEDEM division of labor, and documented sources of coupling uncertainty

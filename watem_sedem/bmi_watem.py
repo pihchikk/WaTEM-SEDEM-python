@@ -7,7 +7,8 @@ from bmipy import Bmi
 from numpy.typing import NDArray
 
 from watem_sedem import data_loader # core module
-from watem_sedem.lateraldistribution import topo_order, compute_erosion
+from watem_sedem import solver
+from watem_sedem.lateraldistribution import topo_order
 
 logger = logging.getLogger(__name__)
 
@@ -23,18 +24,6 @@ def _to_plain(name: str, a: Any) -> NDArray[Any]:
     else:
         out = np.asarray(a)
     return np.ascontiguousarray(out)
-
-
-def _ktc_mult_from_cfg(cfg) -> float:
-    # Pydantic-like
-    md = getattr(cfg, "model_dump", None)
-    if callable(md):
-        return float(md().get("calibration", {}).get("ktc_multiplier", 1.0))
-    # Attribute or dict
-    calib = getattr(cfg, "calibration", None)
-    if isinstance(calib, dict):
-        return float(calib.get("ktc_multiplier", 1.0))
-    return float(getattr(calib, "ktc_multiplier", 1.0))
 
 
 class BmiWaTEM(Bmi):
@@ -119,9 +108,10 @@ class BmiWaTEM(Bmi):
             if not isinstance(data[key], np.ndarray):
                 data[key] = np.full(shape, data[key], dtype=float)
 
-        m = _ktc_mult_from_cfg(cfg)
-        data["ktc"] = (data["ktc"].astype(float) if isinstance(data["ktc"], np.ndarray)
-                       else float(data["ktc"])) * m
+        # ktc is no longer a dimensionless number scaled by ktc_multiplier; it
+        # is a length in metres that solver.select_ktc() derives per cell from
+        # the C factor against ktc_limit. Doing it here as well would apply it
+        # twice.
 
         # flow direction: internal D8 (default) or externally supplied (e.g. LISEM)
         flow_source = getattr(cfg, "flow_direction_source", "internal") or "internal"
@@ -135,6 +125,13 @@ class BmiWaTEM(Bmi):
         bad = (fdir < 0) | (fdir > 7)
         fdir[bad] = -1
         data["flow_direction"] = fdir
+
+        # A BMI's variable set is static, so tillage outputs are declared here
+        # from the config rather than appearing after the first update().
+        if cfg.tillage.enabled:
+            self._output_var_names = (*self._output_var_names, "TILLEROS", "TOTALEROS")
+            self._var_loc.update({v: "node" for v in ("TILLEROS", "TOTALEROS")})
+            self._grids[0] = [*self._input_var_names, *self._output_var_names]
 
         # cache static grid/topology (Step 1: no re-derivation inside update())
         self._topo = topo_order(data["flow_direction"])
@@ -218,58 +215,26 @@ class BmiWaTEM(Bmi):
         data = self._data
         cfg = self._cfg
 
+        # Drivers may have been changed through set_value() since the last
+        # update(); fold them back into the data dict the solver reads, so both
+        # entry points run identical code on identical inputs.
+        for key in self._input_var_names:
+            if key in self._values:
+                data[key] = self._values[key]
+
         Rfactor = self._values["Rfactor"]
-        R_scalar = float(np.mean(Rfactor)) if isinstance(Rfactor, np.ndarray) else float(Rfactor)
+        data["Rfactor"] = (float(np.mean(Rfactor)) if isinstance(Rfactor, np.ndarray)
+                           else float(Rfactor))
+        data["flow_direction"] = self._flow_direction
 
-        SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY = compute_erosion(
-            LS             = self._values["LS-factor"],
-            Kfactor        = self._values["Kfactor"],
-            Cfactor        = self._values["Cfactor"],
-            Pfactor        = self._values["Pfactor"],
-            R_factor       = R_scalar,
-            bulk_density   = data["bulk-density"],
-            slope          = self._values["slope"],
-            aspect         = self._values["aspect"],
-            ktc            = self._values["ktc"],
-            cell_res       = data["cell_size"],
-            flow_direction = self._flow_direction,
-            topo           = self._topo,
-        )
+        SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY, TILLEROS = solver.solve(cfg, data)
 
-        # unit conversions
-        cell_area       = data["cell_size"]**2
-        bd              = data["bulk-density"]
-        sed_mass_factor = bd/1000.0 * (10000.0 / cell_area)
-        ero_mass_factor = bd * (10000.0 / 1000.0)
-
-        su = cfg.output.sediment_unit
-        eu = cfg.output.erosion_unit
-
-        if su == "m3":
-            sed_arr, cap_arr = SEDI_OUT, CAPACITY
-            sed_label = cap_label = "m3 cell-1"
-        elif su == "kg":
-            sed_arr, cap_arr = SEDI_OUT * bd, CAPACITY * bd
-            sed_label = cap_label = "kg cell-1"
-        else:  # "t/ha"
-            sed_arr, cap_arr = SEDI_OUT * sed_mass_factor, CAPACITY * sed_mass_factor
-            sed_label = cap_label = "t ha-1"
-
-        if eu == "m":
-            ero_arr, ero_label = WATEREROS, "m"
-        elif eu == "mm":
-            ero_arr, ero_label = WATEREROS * 1000.0, "mm"
-        elif eu == "kg":
-            ero_arr, ero_label = WATEREROS * cell_area * bd, "kg cell-1"
-        else:  # "t/ha"
-            ero_arr, ero_label = WATEREROS * ero_mass_factor, "t ha-1"
-
-        self._values["SEDI_OUT"]  = _to_plain("SEDI_OUT",  sed_arr.astype(np.float32, copy=False))
-        self._values["CAPACITY"]  = _to_plain("CAPACITY",  cap_arr.astype(np.float32, copy=False))
-        self._values["WATEREROS"] = _to_plain("WATEREROS", ero_arr.astype(np.float32, copy=False))
-        self._var_units["SEDI_OUT"]  = sed_label
-        self._var_units["CAPACITY"]  = cap_label
-        self._var_units["WATEREROS"] = ero_label
+        # Same conversion the CLI writes its rasters with, from the same
+        # function -- the two used to carry separate copies and drifted.
+        fields = solver.convert_units(cfg, data, SEDI_OUT, CAPACITY, WATEREROS, TILLEROS)
+        for name, (arr, label) in fields.items():
+            self._values[name] = _to_plain(name, np.asarray(arr, dtype=np.float32))
+            self._var_units[name] = label
 
         self._epoch += 1
         self._values["epoch_index"] = np.full(self._shape, self._epoch, dtype=np.int32)

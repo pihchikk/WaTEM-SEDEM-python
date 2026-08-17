@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "watem-sedem-bmi"
-version = "0.1.0"
+version = "0.2.0"
 description = "BMI wrapper for the WaTEM-SEDEM soil erosion / sediment transport model"
 readme = "README.md"
 requires-python = ">=3.10"
