@@ -3,18 +3,24 @@ name: publish
 # Pure Python, so one universal wheel -- no build matrix, no auditwheel.
 #
 # Publishing uses trusted publishing (OIDC): no API token in repository secrets.
-# The registered TestPyPI publisher is
+# The publisher on the index must match the OIDC claims GitHub sends, all four:
 #
-#     project     bmi-WaTEM-SEDEM        (normalises to bmi-watem-sedem)
-#     repository  pihchikk/bmi-WaTEM-SEDEM
-#     workflow    publish.yml
-#     environment bmi-watem-sedem
+#     repository   pihchikk/bmi-watem-sedem     <- lowercase, exactly as GitHub
+#                                                  stores it after the rename
+#     workflow     publish.yml
+#     environment  bmi-watem-sedem
+#     project      bmi-watem-sedem              (pyproject says bmi-WaTEM-SEDEM;
+#                                                PyPI normalises it to this)
 #
-# and all four have to match or the upload is rejected with "invalid-publisher".
-# The repository line is the one to watch: OIDC carries the name of the repo
-# actually running the workflow, so this must run from a repo named
-# bmi-WaTEM-SEDEM. If it still lives at WaTEM-SEDEM-python, either rename the
-# repo on GitHub (redirects are kept) or edit the publisher on TestPyPI.
+# The repository claim is case-sensitive and it is what bit us: a publisher
+# registered as `bmi-WaTEM-SEDEM` was rejected with `invalid-publisher` while
+# GitHub was sending `bmi-watem-sedem`. Everything else matched. If the exchange
+# fails, read the claims the action prints and compare them character by
+# character with the publisher -- the failure is a mismatch, not a build error.
+#
+# Note that `workflow_dispatch` only appears in the Actions UI once this file is
+# on the DEFAULT branch. Until this branch is merged, a tag is the only way to
+# trigger it -- which is why tags publish to TestPyPI here.
 #
 #   tag v*                       -> TestPyPI
 #   workflow_dispatch            -> TestPyPI by default, PyPI on request
