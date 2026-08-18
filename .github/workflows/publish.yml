@@ -2,21 +2,30 @@ name: publish
 
 # Pure Python, so one universal wheel -- no build matrix, no auditwheel.
 #
-# Publishing uses trusted publishing (OIDC): no API token in repository secrets.
-# The publisher on the index must match the OIDC claims GitHub sends, all four:
+# Two ways to authenticate, and the workflow takes whichever is available.
 #
-#     repository   pihchikk/bmi-watem-sedem     <- lowercase, exactly as GitHub
-#                                                  stores it after the rename
-#     workflow     publish.yml
-#     environment  bmi-watem-sedem
-#     project      bmi-watem-sedem              (pyproject says bmi-WaTEM-SEDEM;
-#                                                PyPI normalises it to this)
+# 1. An API token in repository secrets -- TEST_PYPI_API_TOKEN for TestPyPI,
+#    PYPI_API_TOKEN for PyPI. Create it on the index (Account settings -> API
+#    tokens), paste it into Settings -> Secrets and variables -> Actions. This
+#    path has nothing to match and nothing to get wrong.
 #
-# The repository claim is case-sensitive and it is what bit us: a publisher
-# registered as `bmi-WaTEM-SEDEM` was rejected with `invalid-publisher` while
-# GitHub was sending `bmi-watem-sedem`. Everything else matched. If the exchange
-# fails, read the claims the action prints and compare them character by
-# character with the publisher -- the failure is a mismatch, not a build error.
+# 2. Trusted publishing (OIDC), used automatically when the secret is empty.
+#    No token anywhere, but the publisher registered on the index must match
+#    every OIDC claim GitHub sends:
+#
+#        repository   pihchikk/bmi-watem-sedem
+#        workflow     publish.yml
+#        environment  bmi-watem-sedem
+#        project      bmi-watem-sedem   (pyproject says bmi-WaTEM-SEDEM; PyPI
+#                                        normalises it to this)
+#
+#    If the exchange is refused with `invalid-publisher`, the action prints the
+#    claims it sent: compare them against the publisher character by character.
+#    Two things that look right but are not: a publisher created on pypi.org
+#    when the upload targets test.pypi.org (they are separate accounts and
+#    separate publisher lists), and a re-run of an already-failed job, which
+#    replays the old claims and fails identically no matter what was fixed
+#    since -- push a new tag instead.
 #
 # Note that `workflow_dispatch` only appears in the Actions UI once this file is
 # on the DEFAULT branch. Until this branch is merged, a tag is the only way to
@@ -94,6 +103,8 @@ jobs:
         with:
           repository-url: https://test.pypi.org/legacy/
           skip-existing: true
+          # Empty secret -> the action falls back to trusted publishing.
+          password: ${{ secrets.TEST_PYPI_API_TOKEN }}
 
   publish:
     name: PyPI
@@ -107,3 +118,5 @@ jobs:
       - uses: actions/download-artifact@v4
         with: { name: dist, path: dist/ }
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
