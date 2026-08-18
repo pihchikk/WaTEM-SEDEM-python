@@ -2,6 +2,10 @@
 
 ## 0.2.0
 
+Distribution renamed to **`bmi-WaTEM-SEDEM`** (was `watem-sedem-bmi`), matching
+the trusted publisher registered on TestPyPI. The import name is unchanged:
+`import watem_sedem`.
+
 Aligns the model with the WaTEM/SEDEM desktop software it is meant to reproduce,
 after obtaining that software's own run settings from the modeller who produced
 the reference rasters. Full account, including the settings themselves and the

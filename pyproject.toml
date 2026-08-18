@@ -3,7 +3,9 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "watem-sedem-bmi"
+# Distribution name, matching the trusted publisher registered on TestPyPI.
+# PyPI normalises this to "bmi-watem-sedem"; the import name stays watem_sedem.
+name = "bmi-WaTEM-SEDEM"
 version = "0.2.0"
 description = "BMI wrapper for the WaTEM-SEDEM soil erosion / sediment transport model"
 readme = "README.md"

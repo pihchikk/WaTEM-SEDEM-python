@@ -2,18 +2,34 @@ name: publish
 
 # Pure Python, so one universal wheel -- no build matrix, no auditwheel.
 #
-#   workflow_dispatch  -> TestPyPI
-#   tag v*             -> PyPI
+# Publishing uses trusted publishing (OIDC): no API token in repository secrets.
+# The registered TestPyPI publisher is
 #
-# Publishing uses trusted publishing (OIDC), so there is no API token in the
-# repository secrets. That requires a one-time setup on the index side: a
-# pending publisher for project `watem-sedem-bmi`, owner `pihchikk`, repository
-# `WaTEM-SEDEM-python`, workflow `publish.yml`. Until that exists the publish
-# step fails with "invalid-publisher" -- which means the index has not been told
-# about this workflow, not that the build is wrong.
+#     project     bmi-WaTEM-SEDEM        (normalises to bmi-watem-sedem)
+#     repository  pihchikk/bmi-WaTEM-SEDEM
+#     workflow    publish.yml
+#     environment bmi-watem-sedem
+#
+# and all four have to match or the upload is rejected with "invalid-publisher".
+# The repository line is the one to watch: OIDC carries the name of the repo
+# actually running the workflow, so this must run from a repo named
+# bmi-WaTEM-SEDEM. If it still lives at WaTEM-SEDEM-python, either rename the
+# repo on GitHub (redirects are kept) or edit the publisher on TestPyPI.
+#
+#   tag v*                       -> TestPyPI
+#   workflow_dispatch            -> TestPyPI by default, PyPI on request
+#
+# Production PyPI has no publisher registered yet; selecting it will fail the
+# same way until one exists.
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Index to publish to"
+        type: choice
+        options: [testpypi, pypi]
+        default: testpypi
   push:
     tags: ['v*']
 
@@ -58,8 +74,11 @@ jobs:
   publish_test:
     name: TestPyPI
     needs: [build]
-    if: github.event_name == 'workflow_dispatch'
+    if: >-
+      github.event_name == 'push' ||
+      inputs.target == 'testpypi'
     runs-on: ubuntu-latest
+    environment: bmi-watem-sedem      # must match the registered publisher
     permissions:
       id-token: write
     steps:
@@ -73,8 +92,9 @@ jobs:
   publish:
     name: PyPI
     needs: [build]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'pypi'
     runs-on: ubuntu-latest
+    environment: bmi-watem-sedem
     permissions:
       id-token: write
     steps:
