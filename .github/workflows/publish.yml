@@ -1,0 +1,83 @@
+name: publish
+
+# Pure Python, so one universal wheel -- no build matrix, no auditwheel.
+#
+#   workflow_dispatch  -> TestPyPI
+#   tag v*             -> PyPI
+#
+# Publishing uses trusted publishing (OIDC), so there is no API token in the
+# repository secrets. That requires a one-time setup on the index side: a
+# pending publisher for project `watem-sedem-bmi`, owner `pihchikk`, repository
+# `WaTEM-SEDEM-python`, workflow `publish.yml`. Until that exists the publish
+# step fails with "invalid-publisher" -- which means the index has not been told
+# about this workflow, not that the build is wrong.
+
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # A tag run may already be uploading; cancelling a half-finished publish is
+  # worse than letting a redundant build finish.
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check dist/*
+          ls -la dist/
+
+      - name: Check the version matches the tag
+        # A tag that disagrees with pyproject.toml publishes a release nobody
+        # can find by the name they were given.
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          VER=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          echo "tag $TAG, pyproject $VER"
+          test "$TAG" = "$VER"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  publish_test:
+    name: TestPyPI
+    needs: [build]
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
+          skip-existing: true
+
+  publish:
+    name: PyPI
+    needs: [build]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: dist, path: dist/ }
+      - uses: pypa/gh-action-pypi-publish@release/v1
