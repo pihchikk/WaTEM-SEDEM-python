@@ -59,7 +59,8 @@ class BmiWaTEM(Bmi):
             "flow_accumulation": "cells",
             "slope_length": "m",
             "flow_direction": "D8 code (-1=no-flow)",  # clearer than "-"
-            **{v: "-" for v in ("LS-factor", "Kfactor", "Cfactor", "Pfactor", "ktc")},
+            **{v: "-" for v in ("LS-factor", "Kfactor", "Cfactor", "Pfactor")},
+            "ktc": "m",
             "Rfactor": "MJ·mm/(ha·h·yr)",
             "bulk-density": "kg/m³",
             "SEDI_OUT": "",
@@ -90,6 +91,12 @@ class BmiWaTEM(Bmi):
         self._topo = None
         self._flow_direction: NDArray[Any] | None = None
 
+        # Names the caller has driven through set_value() at least once. Only
+        # ktc needs this: solver.solve() otherwise always derives it from
+        # Cfactor (see the note in update()), silently discarding anything
+        # set_value('ktc', ...) wrote.
+        self._externally_set: set[str] = set()
+
     # ── setup ────────────────────────────────────────────────────────────
     def initialize(self, filename: str | None = None) -> None:
         """Static, one-time grid setup: load config/inputs, normalize dtypes,
@@ -101,10 +108,16 @@ class BmiWaTEM(Bmi):
         data = data_loader.load_inputs(cfg)
         shape = data["elevation"].shape
 
-        # broadcast WaTEM scalars (Rfactor included so set_value() with a
-        # full-grid array works uniformly whether the config provided a
-        # scalar default or a raster)
-        for key in ("LS-factor", "Kfactor", "Cfactor", "Pfactor", "ktc", "Rfactor"):
+        # broadcast WaTEM scalars (Rfactor and bulk-density included so
+        # set_value() with a full-grid array works uniformly whether the
+        # config provided a scalar default or a raster). Like Rfactor,
+        # bulk-density is folded back to a representative scalar in update()
+        # before the solve: the d8 router (lateraldistribution.compute_cell)
+        # takes it as one unindexed float per cell, same as Rfactor, so a
+        # per-cell raster is not honoured spatially by either entry point
+        # today -- broadcasting here only exists to satisfy the BMI grid-size
+        # contract for get_value()/set_value(), not to make it spatial.
+        for key in ("LS-factor", "Kfactor", "Cfactor", "Pfactor", "ktc", "Rfactor", "bulk-density"):
             if not isinstance(data[key], np.ndarray):
                 data[key] = np.full(shape, data[key], dtype=float)
 
@@ -225,7 +238,16 @@ class BmiWaTEM(Bmi):
         Rfactor = self._values["Rfactor"]
         data["Rfactor"] = (float(np.mean(Rfactor)) if isinstance(Rfactor, np.ndarray)
                            else float(Rfactor))
+        bulk_density = self._values["bulk-density"]
+        data["bulk-density"] = (float(np.mean(bulk_density)) if isinstance(bulk_density, np.ndarray)
+                                else float(bulk_density))
         data["flow_direction"] = self._flow_direction
+
+        # solver.select_ktc() otherwise always overwrites ktc from Cfactor;
+        # tell it to leave set_value('ktc', ...) alone when the caller used it.
+        # The CLI never touches data['ktc_source'], so its behaviour -- and
+        # test_bmi_matches_cli's byte-for-byte parity -- is unchanged.
+        data["ktc_source"] = "external" if "ktc" in self._externally_set else "internal"
 
         SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY, TILLEROS = solver.solve(cfg, data)
 
@@ -304,12 +326,16 @@ class BmiWaTEM(Bmi):
     def set_value(self, name: str, src: NDArray[Any]) -> None:
         val = self.get_value_ptr(name)
         val[:] = src.reshape(val.shape)
+        if name == "ktc":
+            self._externally_set.add(name)
 
     def set_value_at_indices(
         self, name: str, inds: NDArray[np.int_], src: NDArray[Any]
     ) -> None:
         arr = self.get_value_ptr(name)
         arr.flat[inds] = src
+        if name == "ktc":
+            self._externally_set.add(name)
 
     # BMI: time
     def get_start_time(self) -> float:

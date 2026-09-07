@@ -114,7 +114,12 @@ def solve(cfg, data: dict):
     the flow -- so it stays a separate field.
     """
     broadcast_scalars(data, np.shape(data["elevation"]))
-    data["ktc"] = select_ktc(cfg, data)
+    # ktc is normally derived from Cfactor (select_ktc). A caller that pushed
+    # its own ktc through BMI's set_value() (data["ktc_source"] == "external",
+    # set by BmiWaTEM.update()) is deliberately overriding that derivation --
+    # respect it. The CLI never sets ktc_source, so this is a no-op there.
+    if data.get("ktc_source") != "external":
+        data["ktc"] = select_ktc(cfg, data)
     data["flow_direction"] = _sanitise_flow_direction(data["flow_direction"])
 
     if cfg.routing_scheme != "d8":
