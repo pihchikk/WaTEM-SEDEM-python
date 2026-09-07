@@ -6,7 +6,6 @@ import os
 import argparse
 import logging
 import numpy as np
-import matplotlib.pyplot as plt
 import rasterio
 
 from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
@@ -92,32 +91,34 @@ def main() -> None:
         for name, (arr, _) in fields.items():
             write_raster(name, np.asarray(arr, dtype=np.float32), meta, outdir, fmt)
 
-    # quick plots if save_plots (save_p) is enabled
-    sed_vmin, sed_vmax = np.nanpercentile(sed_arr, [2, 98])
-    cap_vmin, cap_vmax = np.nanpercentile(cap_arr, [2, 98])
-    ero_vmin, ero_vmax = np.nanpercentile(ero_arr, [2, 98])
-
-    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
-
-    im1 = ax1.imshow(sed_arr, vmin=sed_vmin, vmax=sed_vmax, interpolation="none")
-    ax1.set_title(f"Sediment ({su})"); ax1.axis("off")
-    fig.colorbar(im1, ax=ax1, label=sed_label, fraction=0.046, pad=0.04)
-
-    im2 = ax2.imshow(cap_arr, vmin=cap_vmin, vmax=cap_vmax, interpolation="none")
-    ax2.set_title(f"Capacity ({su})"); ax2.axis("off")
-    fig.colorbar(im2, ax=ax2, label=cap_label, fraction=0.046, pad=0.04)
-
-    im3 = ax3.imshow(ero_arr, vmin=ero_vmin, vmax=ero_vmax, interpolation="none")
-    ax3.set_title(f"Erosion ({eu})"); ax3.axis("off")
-    fig.colorbar(im3, ax=ax3, label=ero_label, fraction=0.046, pad=0.04)
-
-    plt.tight_layout()
+    # quick plots, only if save_plots (save_p) is enabled -- matplotlib is an
+    # optional dependency (the `plots` extra), so it must not be imported,
+    # even transitively, on a path a bare install is expected to support.
     if save_p:
+        import matplotlib.pyplot as plt
+
+        sed_vmin, sed_vmax = np.nanpercentile(sed_arr, [2, 98])
+        cap_vmin, cap_vmax = np.nanpercentile(cap_arr, [2, 98])
+        ero_vmin, ero_vmax = np.nanpercentile(ero_arr, [2, 98])
+
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+
+        im1 = ax1.imshow(sed_arr, vmin=sed_vmin, vmax=sed_vmax, interpolation="none")
+        ax1.set_title(f"Sediment ({su})"); ax1.axis("off")
+        fig.colorbar(im1, ax=ax1, label=sed_label, fraction=0.046, pad=0.04)
+
+        im2 = ax2.imshow(cap_arr, vmin=cap_vmin, vmax=cap_vmax, interpolation="none")
+        ax2.set_title(f"Capacity ({su})"); ax2.axis("off")
+        fig.colorbar(im2, ax=ax2, label=cap_label, fraction=0.046, pad=0.04)
+
+        im3 = ax3.imshow(ero_arr, vmin=ero_vmin, vmax=ero_vmax, interpolation="none")
+        ax3.set_title(f"Erosion ({eu})"); ax3.axis("off")
+        fig.colorbar(im3, ax=ax3, label=ero_label, fraction=0.046, pad=0.04)
+
+        plt.tight_layout()
         path = os.path.join(outdir, "maps.png")
         fig.savefig(path, dpi=150)
         logger.info("saved plot -> %s", path)
-    else:
-        plt.show()
 
 if __name__ == "__main__":
     main()
