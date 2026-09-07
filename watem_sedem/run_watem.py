@@ -9,8 +9,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import rasterio
 
-from data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
-from lateraldistribution import topo_order, compute_erosion
+from watem_sedem.data_loader import load_and_validate_config, merge_cli_overrides, load_inputs
+from watem_sedem import mfd
+from watem_sedem import solver
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s: %(message)s")
 for _lib in ("rasterio", "fiona", "numexpr"):
@@ -72,78 +73,24 @@ def main() -> None:
 
     data = load_inputs(cfg)
 
-    # expand scalar WaTEM layers to full grids
-    shape = data["elevation"].shape
-    for key in ("LS-factor", "Kfactor", "Cfactor", "Pfactor", "ktc"):
-        if not isinstance(data[key], np.ndarray):
-            data[key] = np.full(shape, data[key], dtype=float)
-
-    m = cfg.calibration.ktc_multiplier
-    data["ktc"] = (data["ktc"].astype(float) if isinstance(data["ktc"], np.ndarray) else float(data["ktc"])) * m
-
-    logger.debug(
-        "shapes: %s",
-        {k: getattr(data[k], "shape", None) for k in ("LS-factor","flow_direction","Cfactor","Kfactor","Pfactor","slope","ktc")}
-    )
-    
-    # Ensure D8 codes for flow_direction (-1 = no flow)
-    fdir = data["flow_direction"]
-    if np.ma.isMaskedArray(fdir):
-        fdir = fdir.filled(-1)
-    fdir = fdir.astype(np.int16, copy=False)
-    bad = (fdir < 0) | (fdir > 7)
-    fdir[bad] = -1
-    data["flow_direction"] = fdir
-
-
-    topo = topo_order(data["flow_direction"])
-    SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY = compute_erosion(
-        LS=data["LS-factor"], Kfactor=data["Kfactor"], Cfactor=data["Cfactor"],
-        Pfactor=data["Pfactor"], R_factor=data["Rfactor"], bulk_density=data["bulk-density"],
-        slope=data["slope"], aspect=data["aspect"], ktc=data["ktc"],
-        cell_res=data["cell_size"], flow_direction=data["flow_direction"], topo=topo
-    )
-
-    # unit conversion
-    cell_area = data["cell_size"] ** 2
-    bd = data["bulk-density"]
-    sed_mass = bd / 1000.0 * (10000.0 / cell_area)   # m³→t/ha
-    ero_mass = bd * (10000.0 / 1000.0)               # m→t/ha
-
     su = args.sediment_unit or cfg.output.sediment_unit
     eu = args.erosion_unit  or cfg.output.erosion_unit
+
+    SEDI_IN, SEDI_OUT, WATEREROS, CAPACITY, TILLEROS = solver.solve(cfg, data)
+    fields = solver.convert_units(cfg, data, SEDI_OUT, CAPACITY, WATEREROS, TILLEROS,
+                                  sediment_unit=su, erosion_unit=eu)
+    sed_arr, sed_label = fields["SEDI_OUT"]
+    cap_arr, cap_label = fields["CAPACITY"]
+    ero_arr, ero_label = fields["WATEREROS"]
+
     save_r = args.save_rasters or cfg.output.save_rasters
     save_p = args.save_plots   or cfg.output.save_plots
-
-    if su == "m3":
-        sed_arr, cap_arr = SEDI_OUT, CAPACITY
-        sed_label = cap_label = "m³ per cell"
-    elif su == "kg":
-        sed_arr, cap_arr = SEDI_OUT * bd, CAPACITY * bd
-        sed_label = cap_label = "kg per cell"
-    else:
-        sed_arr, cap_arr = SEDI_OUT * sed_mass, CAPACITY * sed_mass
-        sed_label = cap_label = "t/ha"
-
-    if eu == "m":
-        ero_arr, ero_label = WATEREROS, "m"
-    elif eu == "mm":
-        ero_arr, ero_label = WATEREROS * 1000.0, "mm"
-    elif eu == "kg":
-        ero_arr, ero_label = WATEREROS * cell_area * bd, "kg per cell"
-    else:
-        ero_arr, ero_label = WATEREROS * ero_mass, "t/ha"
-    
-    sed_arr = np.asarray(sed_arr, dtype=np.float32)
-    cap_arr = np.asarray(cap_arr, dtype=np.float32)
-    ero_arr = np.asarray(ero_arr, dtype=np.float32)
 
     if save_r:
         fmt = cfg.output.format.lstrip(".")
         meta = data["meta"]
-        write_raster("SEDI_OUT",  sed_arr.astype(np.float32), meta, outdir, fmt)
-        write_raster("CAPACITY",  cap_arr.astype(np.float32), meta, outdir, fmt)
-        write_raster("WATEREROS", ero_arr.astype(np.float32), meta, outdir, fmt)
+        for name, (arr, _) in fields.items():
+            write_raster(name, np.asarray(arr, dtype=np.float32), meta, outdir, fmt)
 
     # quick plots if save_plots (save_p) is enabled
     sed_vmin, sed_vmax = np.nanpercentile(sed_arr, [2, 98])

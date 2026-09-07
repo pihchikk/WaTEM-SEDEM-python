@@ -4,16 +4,25 @@ The repo lets you run the core WaTEM-SEDEM model in Python, wrapped with the Bas
 
 It can be used in two ways:
 
-- **As a standalone script** via `src/run_watem.py` - to run directly using a config file.  
-- **As a BMI module** (`bmi_watem.py`) - within a wrapper to integrate into larger model frameworks.
+- **As a command-line tool** via `watem-sedem` - to run directly using a config file.
+- **As a BMI module** (`from watem_sedem import BmiWaTEM`) - within a wrapper to integrate into larger model frameworks.
 
-**Note:** This is not a full-featured version. It supports a single default scenario with no tillage, strips, infrastructure, or multi-factor options. Modes control *input files configuration* only.
+**Note:** Not a full-featured version. Grass strips, infrastructure and
+multi-factor options are not implemented, and modes control *input file
+configuration* only. Tillage erosion **is** implemented (`tillage.enabled`,
+default off) but has no reference run to validate against — see
+`docs/REFERENCE_RUN_SETTINGS.md`.
+
+**Both entry points run the same solver** (`watem_sedem/solver.py`); the CLI and
+`BmiWaTEM` must agree byte for byte, which `tests/test_bmi_matches_cli.py`
+asserts. They once did not, and the divergence went unnoticed because nothing
+compared them.
 
 ---
 
 ## Structure
 
-- `src/` - Python scripts for preprocessing, execution, and BMI access  
+- `watem_sedem/` - the installable Python package: preprocessing, execution, and BMI access  
 - `data/` - example input files under `rasters/` and `pywatemsedem_input/`. The object is a test area within All-Russian Research Institute of Reclaimed Lands   
 - `tests/` - reference outputs per input mode  
 - `metadata/` - JSON descriptors like `WaTEM_SEDEM_STD_extended.json` (schema + standard model metadata)  
@@ -46,10 +55,20 @@ None of these change the core model logic, just the input configuration.
 
 ## How to Run
 
-### SAGA engine
-Some preprocessing steps (e.g., slope, LS-factor) call **SAGA GIS** (`saga_cmd`).  
-Ensure SAGA is installed and available in your `PATH`. Usability has been checked for **SAGA GIS 8.5.1**  
+### SAGA engine (only for preprocessing modes)
+Some preprocessing steps (e.g., slope, LS-factor) call **SAGA GIS** (`saga_cmd`)
+via `pywatemsedem`. Usability has been checked for **SAGA GIS 8.5.1**
 ([download here](https://sourceforge.net/projects/saga-gis/files/SAGA%20-%208/SAGA%20-%208.5.1/)).
+
+**`external` mode does not need SAGA or `pywatemsedem` at all** -- all covariates
+are read from pre-computed rasters. `pywatemsedem` raises an error merely on
+import when SAGA is absent, so it is imported lazily and shipped as the optional
+`preprocess` extra rather than a hard dependency. Install it only if you use a
+mode that computes covariates:
+
+```bash
+pip install -e ".[preprocess]"   # adds pywatemsedem; requires SAGA on PATH
+```
 
 ### GDAL engine
 This project uses Fiona/Rasterio/GeoPandas, which require the **GDAL C library** at runtime.
@@ -64,7 +83,7 @@ sudo apt-get update && sudo apt-get install -y libgdal34 gdal-bin
 ```powershell
 conda create -n WaTEM-SEDEM-python -c conda-forge python=3.12 gdal fiona rasterio geopandas pyproj shapely
 conda activate WaTEM-SEDEM-python
-pip install -r requirements.txt --no-deps
+pip install -e . --no-deps
 ```
 
 
@@ -72,8 +91,10 @@ pip install -r requirements.txt --no-deps
 ```bash
 git clone https://github.com/pihchikk/Watem-SEDEM-python.git
 cd Watem-SEDEM-python
-pip install -r requirements.txt
+pip install -e .
 ```
+This installs the `watem_sedem` package and the `watem-sedem` command. Add
+`".[preprocess]"` for the SAGA-backed modes, `".[plots]"` for PNG map output.
 ### 2. Prepare data
 
 Place input data:
@@ -100,9 +121,15 @@ Place input data:
 > If you only have a DEM, catchment mask, and landuse, you can set  
 > `mode: hybrid` to let the model compute missing DTM covariates and use default scalars for WaTEM factors.
 
-### 3. Running rom the repo root:
+### 3. Running
+
+Install the package first (see Installation above), then:
 ```bash
-python src/run_watem.py -c config.yaml --mode hybrid
+watem-sedem -c config.yaml --mode hybrid
+```
+Equivalently, without installing the console script:
+```bash
+python -m watem_sedem.run_watem -c config.yaml --mode hybrid
 ```
 Other flags include:
 
@@ -116,15 +143,63 @@ Values from CLI override those in `config.yaml`.
 ## BMI quick start
 
 ```python
-from src.bmi_watem import BmiWaTEM
+from watem_sedem import BmiWaTEM
 
 m = BmiWaTEM()
 m.initialize("config.yaml")
-m.update()  # single annual step
+m.update()  # one epoch; safe to call repeatedly (see Coupling section below)
 sed = m.get_value("SEDI_OUT")
 m.finalize()
 print(type(sed), getattr(sed, "shape", None))
 ```
+---
+
+## Coupling
+
+WaTEM-SEDEM is a single-shot RUSLE + transport-capacity solver, not a transient
+model — it has no internal time integration, so it cannot be driven inside the
+same daily BMI loop as a physically-based, sub-daily model like LISEM or a
+crop-growth model like AquaCrop. Instead, `BmiWaTEM` is meant to be driven as an
+**epoch component**: `initialize()` performs one-time static setup (loading
+rasters, deriving/ingesting flow topology), and `update()` — now safe to call
+repeatedly — runs the RUSLE solve using whatever `Cfactor`/`Pfactor`/`ktc`/
+`Rfactor` values were most recently set via `set_value()`.
+
+Two coupling modes are available via `coupling_mode` in `config.yaml`:
+
+- **`epoch`** (primary target) — one `update()` per AquaCrop growing season.
+  Seasonal `Cfactor`/`Rfactor` are derived from daily AquaCrop/LISEM output
+  using `src/coupling_drivers.py` (`canopy_series_to_cfactor()`,
+  `rainfall_series_to_rfactor()`).
+- **`event`** (lower priority) — one `update()` per rainfall event, using
+  `event_rfactor()` and canopy cover at event time. Guard against
+  double-counting the same storm LISEM already accounted for via
+  `disable_if_lisem_covers_event` (default `true`).
+- **`static`** — unchanged stand-alone behavior (default scalar/raster drivers
+  from `config.yaml`), used as the baseline arm in comparisons.
+
+When both WaTEM-SEDEM and LISEM cover the same catchment, set
+`flow_direction_source: external` (with `external_flow_direction_path`) so both
+models route sediment over the same topology instead of WaTEM-SEDEM deriving an
+independent, possibly inconsistent, flow grid. Note that this ingests a *D8*
+grid, while the default routing is `desmet_govers` (see `routing_scheme`);
+supplying an external flow direction therefore also pins the scheme to `d8`.
+
+See `docs/COUPLING_VARS_LEDGER.md` for the full variable ledger, the LISEM/
+WaTEM-SEDEM division of labor, and documented sources of coupling uncertainty
+(in particular the R-factor's daily-rainfall-depth approximation). A
+baseline-vs-coupled comparison harness — `tests/compare_baseline_vs_coupled.py`
+— quantifies what the coupling actually changes (scalar summary table, spatial
+diff rasters, Spearman rank correlation, per-driver sensitivity breakdown); run
+it with:
+
+```bash
+python tests/compare_baseline_vs_coupled.py -c config.yaml
+```
+
+Artifacts land in `tests/tests_epoch_coupling/` (rasters + `maps.png` +
+`summary.json`), following the existing `tests_*` directory convention.
+
 ---
 
 ## Example maps generated by the model:

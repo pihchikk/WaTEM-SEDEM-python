@@ -1,0 +1,46 @@
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+# Distribution name, matching the trusted publisher registered on TestPyPI.
+# PyPI normalises this to "bmi-watem-sedem"; the import name stays watem_sedem.
+name = "bmi-WaTEM-SEDEM"
+version = "0.2.0"
+description = "BMI wrapper for the WaTEM-SEDEM soil erosion / sediment transport model"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "numpy>=1.23",
+    "PyYAML>=6.0",
+    "pydantic>=2.0",
+    "rasterio>=1.3",
+    "affine>=2.4",
+    "bmipy>=2.0",
+    "geopandas>=0.14",
+    "fiona>=1.9",
+    "shapely>=2.0",
+    "pyproj>=3.4",
+    "netCDF4>=1.6",
+    "pandas",
+]
+
+[project.optional-dependencies]
+# pywatemsedem drives the SAGA-backed preprocessing paths (deriving DTM
+# covariates, or a Cfactor from landuse). It raises OSError on import when SAGA
+# GIS is absent, so it is imported lazily and kept out of the base dependency
+# set: `external` mode reads pre-computed rasters and never reaches it, and
+# that is the mode a worker container wants.
+preprocess = ["pywatemsedem"]
+# run_watem.py's optional plotting output (config: output.save_plots).
+plots = ["matplotlib>=3.4", "brokenaxes>=0.6"]
+
+[project.scripts]
+watem-sedem = "watem_sedem.run_watem:main"
+
+[tool.setuptools.packages.find]
+include = ["watem_sedem*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

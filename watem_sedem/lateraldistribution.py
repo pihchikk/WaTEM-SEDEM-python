@@ -18,6 +18,34 @@ for _lib in ("rasterio","fiona","numexpr"):
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
  
+def transport_capacity(LS, Kfactor, R_factor, slope_rad, aspect_rad, ktc_m, cell_res):
+    """Transport capacity per cell, m3/yr. Works on scalars or arrays alike.
+
+        TC = ktc * R * K * (LS - 0.6*6.86*|sin(slope)|**0.8)      kg m-1 yr-1
+        capacity = TC * flow width through the cell                kg yr-1
+
+    Units, since getting these wrong is what this function exists to prevent:
+    R is MJ mm ha-1 h-1 yr-1 and K is kg h MJ-1 mm-1, so R*K is kg ha-1 yr-1;
+    /1e4 puts it in kg m-2 yr-1; ktc is a LENGTH in metres (confirmed with the
+    modeller who produced the reference runs), which turns it into a flux per
+    unit contour width. Multiplying by the width of flow through the cell gives
+    kg yr-1, and dividing by bulk density gives m3 -- the units SEDI_IN and
+    SEDI_OUT are carried in.
+
+    The width uses ASPECT, not slope: it is the geometric width a flow line of
+    the given bearing presents across a square cell, the same
+    |sin| + |cos| correction Desmet & Govers apply in the L factor. The previous
+    code took it from the slope raster and multiplied by cell area twice over,
+    which left the "capacity" in m^5 and around cell_res**3 too large.
+
+    `Kfactor` is the raw K, not K/1000.
+    """
+    bracket = LS - 0.6 * 6.86 * np.abs(np.sin(slope_rad)) ** 0.8
+    tc_kg_per_m = ktc_m * R_factor * Kfactor * np.maximum(bracket, 0.0) / 1e4
+    width = cell_res * (np.abs(np.sin(aspect_rad)) + np.abs(np.cos(aspect_rad)))
+    return tc_kg_per_m * width
+
+
 def topo_order(flow_direction: np.ndarray) -> List[Tuple[int, int]]:
     """
     Given a 2D array `flow_direction` of D8 codes 0–7 (or -1 for no‐flow),
@@ -82,35 +110,34 @@ def compute_cell(
 
     Args:
       LS_cell      : LS factor (unitless)
-      Kfactor_cell : K factor (kg·ha·hr)/(MJ·mm)
+      Kfactor_cell : K factor, raw (kg h MJ-1 mm-1)
       Cfactor_cell : cover-management factor (unitless)
       Pfactor_cell : support practice factor (unitless)
-      R_factor     : rainfall‐erosivity (MJ·mm/(ha·hr·yr))
-      bulk_density : soil bulk density (kg/m³)
-      slope_cell   : slope in degrees
-      aspect_cell  : aspect in degrees (unused here)
-      ktc_cell     : transport coefficient (unitless)
+      R_factor     : rainfall-erosivity (MJ mm ha-1 h-1 yr-1)
+      bulk_density : soil bulk density (kg/m3)
+      slope_cell   : slope in RADIANS
+      aspect_cell  : aspect in radians (sets the flow width in the capacity)
+      ktc_cell     : transport coefficient, metres
       cell_res     : grid cell size (m)
-      sedi_in_cell : incoming sediment volume (m³)
+      sedi_in_cell : incoming sediment volume (m3)
 
     Returns:
       (sedi_out_m3, watereros_m, capacity_m3)
     """
-    area = cell_res**2
-    slope_rad  = np.deg2rad(slope_cell)
+    area = cell_res ** 2
 
-    rusle_t_ha  = R_factor * Cfactor_cell * Pfactor_cell * Kfactor_cell * LS_cell
-    rusle_kg_m2 = rusle_t_ha * 0.1
-    ero_pot     = rusle_kg_m2 * area / bulk_density  # m³ potential
+    # Slope arrives in radians -- SAGA is called with -UNIT_SLOPE 0 and
+    # compute_ls() reads the same raster as radians. This used to deg2rad it
+    # again, which divided every slope by 57 and flattened the capacity's
+    # steepness correction to nothing.
+    slope_rad = slope_cell
 
-    slope_term = LS_cell - 0.6 * 6.86 * np.tan(slope_rad)**0.8
-    cap_kg_raw = ktc_cell * rusle_kg_m2 * slope_term * area
+    rusle_kg_m2 = R_factor * Cfactor_cell * Pfactor_cell * Kfactor_cell * LS_cell / 1e4
+    ero_pot = rusle_kg_m2 * area / bulk_density  # m3 potential
 
-    cap_kg     = cap_kg_raw if cap_kg_raw > 0 else ktc_cell * rusle_kg_m2 * area
-    cap_kg     = max(cap_kg, 0.0)
-
-    distcorr = area * (abs(np.sin(slope_rad)) + abs(np.cos(slope_rad)))
-    cap_m3   = cap_kg * distcorr / bulk_density
+    cap_kg = transport_capacity(LS_cell, Kfactor_cell, R_factor,
+                               slope_rad, aspect_cell, ktc_cell, cell_res)
+    cap_m3 = max(cap_kg, 0.0) / bulk_density
 
     total_in = sedi_in_cell + ero_pot
     if total_in > cap_m3:
@@ -155,14 +182,14 @@ def compute_erosion(
     for (i, j) in topo:
         out, we, cap = compute_cell(
             LS[i, j],
-            Kfactor[i, j]   / 1000.0,
+            Kfactor[i, j],
             Cfactor[i, j],
             Pfactor[i, j],
             R_factor,
             bulk_density,
             slope[i, j],
             aspect[i, j],
-            ktc[i, j] / 1000.0,
+            ktc[i, j],
             cell_res,
             SEDI_IN[i, j]
         )

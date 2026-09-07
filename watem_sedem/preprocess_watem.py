@@ -14,10 +14,10 @@ from shapely.geometry import LineString, Polygon
 from affine import Affine
 import logging
 
-from pywatemsedem.catchment   import Catchment
-from pywatemsedem.userchoices import UserChoices
-from pywatemsedem.scenario    import Scenario
-from pywatemsedem.geo.rasters import AbstractRaster
+# lazy, same reason as compute_dtm.py
+def _catchment_cls():
+    from pywatemsedem.catchment import Catchment
+    return Catchment
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +62,38 @@ def preprocess_all(
     show_preview: bool = False,
 ) -> None:
     """End-to-end prep: Catchment, optional dummies, Scenario, write outputs."""
+    # Imported lazily: only preprocess_all() needs these, and pinning their
+    # availability at module import time would break external/user_watem-mode
+    # callers (data_loader imports this module unconditionally) even though
+    # they never reach this function.
+    try:
+        from pywatemsedem.userchoices import UserChoices
+    except ImportError as exc:
+        import pywatemsedem
+        raise NotImplementedError(
+            "preprocess_all() is written against the pywatemsedem 0.x API and the "
+            f"installed version is {getattr(pywatemsedem, '__version__', 'unknown')}. "
+            "This affects `internal` mode and the preprocessing branch of "
+            "`user_dtm`; every other mode is unaffected and does not reach here.\n"
+            "\n"
+            "The gap is not the import alone. In 0.x, UserChoices() took no "
+            "arguments and was filled in afterwards through set_ecm_options(ini), "
+            "set_model_options(ini), set_model_variables(ini) and "
+            "set_model_version(), then read back as .dict_model_options and "
+            ".dict_variables -- all of which this function relies on. In 1.2 the "
+            "class is pywatemsedem.choices.Choices and its constructor requires "
+            "five prepared objects (options, parameters, extensions, "
+            "extensionparameters, output). Porting means rewriting the userchoices."
+            "ini handling around the new objects, not renaming an import.\n"
+            "\n"
+            "It is also untestable as the repository stands: data/pywatemsedem_input/ "
+            "carries no DTM, catchment or landuse, only .aux.xml sidecars, so there "
+            "is nothing to run the ported code against.\n"
+            "\n"
+            "Use `hybrid` or `external` with pre-computed rasters instead."
+        ) from exc
+    from pywatemsedem.scenario import Scenario
+
     cfg = load_config(cfg_path)
     logger.info("Loaded config from %s", cfg_path)
 
@@ -74,7 +106,7 @@ def preprocess_all(
     logger.info("Output folders: rasters→%s, tables→%s", rd, sd)
 
     # Catchment
-    catch = Catchment(
+    catch = _catchment_cls()(
         name           = cfg["catchment_name"],
         vct_catchment  = raw_dir / ri["catchment"],
         rst_dtm        = raw_dir / ri["elevation"],

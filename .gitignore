@@ -27,3 +27,7 @@ pywatemsedem_preprocessed_rasters/
 *.prj
 WaTEM_SEDEM_STD.json
 template.json
+
+# Python build artifacts
+build/
+dist/

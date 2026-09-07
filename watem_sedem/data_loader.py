@@ -25,23 +25,31 @@ from rasterio.warp import reproject, Resampling
 from rasterio.features import rasterize
 
 # Optional cleanup override used by pywatemsedem
-import pywatemsedem.geo.utils as _utils
-_utils.clean_up_tempfiles = lambda *args, **kwargs: None
+# NOTE: pywatemsedem is imported lazily (see _load_pywatemsedem below) -- it
+# raises OSError at import time when SAGA GIS is absent, and it is only ever
+# needed by the Cfactor-from-landuse preprocessing path. `external` mode uses
+# pre-computed rasters and never reaches it.
 
 from pydantic import BaseModel, field_validator, ConfigDict
 
-from pywatemsedem.catchment import Catchment
-from pywatemsedem.cfactor import create_cfactor_degerick2015
+def _load_pywatemsedem():
+    """Import pywatemsedem on first actual use, not at module import."""
+    import pywatemsedem.geo.utils as _utils
+    _utils.clean_up_tempfiles = lambda *args, **kwargs: None
+    from pywatemsedem.catchment import Catchment
+    from pywatemsedem.cfactor import create_cfactor_degerick2015
+    return Catchment, create_cfactor_degerick2015
 
-from raster_calculations import compute_ls
-from compute_dtm import (
+from watem_sedem.raster_calculations import compute_ls
+from watem_sedem.compute_dtm import (
     compute_slope,
     compute_aspect,
     compute_flow_accumulation,
     compute_slope_length,
     compute_flow_direction,
 )
-from preprocess_watem import preprocess_all, _ensure_int16_categorical
+from watem_sedem import mfd
+from watem_sedem.preprocess_watem import preprocess_all, _ensure_int16_categorical
 
 
 # ── logging ────────────────────────────────────────────────────────────────────
@@ -68,7 +76,27 @@ class OutputConfig(BaseModel):
 
 
 class Calibration(BaseModel):
+    """Transport-capacity coefficients, in METRES.
+
+    WaTEM/SEDEM selects between two of them per cell by comparing the C factor
+    against ktc_limit; ktc_limit is that C threshold, not a coefficient. The
+    defaults are the desktop software's own (75 / 250 / 0.1).
+    """
+    ktc_low: float = 75.0
+    ktc_high: float = 250.0
+    ktc_limit: float = 0.1
+    # Retained so old configs still load. No longer applied: ktc used to be a
+    # dimensionless number scaled by this, which had no relation to the
+    # software's metres. See docs/REFERENCE_RUN_SETTINGS.md.
     ktc_multiplier: float = 1.0
+
+
+class Tillage(BaseModel):
+    """Tillage erosion -- WaTEM's "T". Off by default: the reference rasters
+    this package is checked against contain water erosion only, so enabling it
+    would make them incomparable. ktil is kg m-1; 600 is the desktop default."""
+    enabled: bool = False
+    ktil: float = 600.0
 
 
 class Config(BaseModel):
@@ -86,11 +114,51 @@ class Config(BaseModel):
     dtm_covariates: Dict[str, bool]
     output: OutputConfig
     calibration: Calibration
+    tillage: Tillage = Tillage()
     config_path: Optional[str] = None
     scenario_year: Optional[int] = None
     scenario_nr: Optional[int] = None
     catchment_name: Optional[str] = None
     pyws_output_dir: Optional[str] = None
+
+    # ── epoch coupling (AquaCrop/LISEM → WaTEM-SEDEM) ─────────────────────
+    # "static": current stand-alone behavior (default scalar/raster drivers).
+    # "epoch": one update() per growing season, drivers derived from daily
+    #          AquaCrop/LISEM series via src/coupling_drivers.py.
+    # "event": one update() per rainfall event (lower priority; see ledger doc).
+    coupling_mode: Literal["static", "epoch", "event"] = "static"
+
+    # "internal": WaTEM-SEDEM derives its own D8 grid (default, current behavior).
+    # "external": ingest a pre-computed flow-direction raster (e.g. from LISEM)
+    #             via external_flow_direction_path instead.
+    flow_direction_source: Literal["internal", "external"] = "internal"
+    external_flow_direction_path: Optional[str] = None
+
+    # event-mode only: skip the erosion solve for a day/window already covered
+    # by an active LISEM event run, to avoid double-counting the same storm.
+    disable_if_lisem_covers_event: bool = True
+
+    # "d8":  each cell's outflow goes to a single neighbour (SAGA's D8 grid).
+    #        Current default -- keeps existing results and the reference
+    #        rasters under tests/tests_*/ reproducible.
+    # "mfd": outflow is split across all downslope neighbours, weighted by
+    #        gradient**mfd_exponent. Closer to what the original WaTEM/SEDEM
+    #        software does; measured on the lom/spok reference catchments it
+    #        raises top-decile erosion IoU from 0.478/0.556 to 0.744/0.730.
+    #        Switching changes every result, so it is opt-in.
+    # NB: named *_scheme to stay distinct from the optional "routing"
+    # input raster in layers/, which is an unrelated per-cell code.
+    routing_scheme: Literal["desmet_govers", "holmgren", "d8"] = "desmet_govers"
+    # holmgren only: 1 = Quinn et al. (1991), 1.1 = Freeman (1991), large -> D8.
+    mfd_exponent: float = 1.0
+
+    # LS-factor formulation, passed straight to compute_ls(). Was hardcoded to
+    # "pascal_mccool1987"; that stays the default so existing results hold, but
+    # it is a first-order choice for the spatial pattern and belongs in config.
+    ls_method: Literal[
+        "wischmeier", "mccool", "govers", "nearing",
+        "pascal_vanoost2003", "pascal_mccool1987", "pascal_nearing1997",
+    ] = "pascal_mccool1987"
 
     @field_validator("raster_dir", "segment_tables_dir", "pyws_output_dir", "raw_input_dir", mode="before")
     @classmethod
@@ -279,7 +347,19 @@ def load_inputs(cfg: Config):
         elif cov == "aspect":
             data["aspect"] = compute_aspect(data["elevation"], data["cell_size"])
         elif cov == "flow_accumulation":
-            data["flow_accumulation"] = compute_flow_accumulation(data["elevation"], data["cell_size"])
+            # LS must see the same flow field the sediment will, so the upslope
+            # area feeding compute_ls() is accumulated under the same weights.
+            if "aspect" not in data and cfg.routing_scheme == "desmet_govers":
+                data["aspect"] = compute_aspect(data["elevation"], data["cell_size"])
+            elev = (data["elevation"].filled(np.nan)
+                    if np.ma.isMaskedArray(data["elevation"]) else data["elevation"])
+            w, has_out = mfd.weights(np.asarray(elev, dtype=float), data["cell_size"],
+                                     scheme=cfg.routing_scheme,
+                                     aspect=np.asarray(data.get("aspect"), dtype=float)
+                                     if data.get("aspect") is not None else None,
+                                     exponent=cfg.mfd_exponent)
+            data["flow_accumulation"] = mfd.accumulate(
+                w, has_out, np.asarray(elev, dtype=float), data["cell_size"])
         elif cov == "slope_length":
             data["slope_length"] = compute_slope_length(data["elevation"], data["cell_size"])
         elif cov == "flow_direction":
@@ -296,7 +376,7 @@ def load_inputs(cfg: Config):
             slope=data["slope"],
             upslope_area=data["flow_accumulation"],
             cell_size=data["cell_size"],
-            method="pascal_mccool1987",
+            method=cfg.ls_method,
             aspect=data.get("aspect"),
         )
         logger.info("DTM 'LS-factor' ← computed")
@@ -357,6 +437,7 @@ def load_inputs(cfg: Config):
                                      fill=0, all_touched=False, dtype="uint8")
 
                 epsg = data["meta"]["crs"].to_epsg()
+                Catchment, create_cfactor_degerick2015 = _load_pywatemsedem()
                 catch = Catchment(
                     name=cfg.catchment_name, vct_catchment=cat_src, rst_dtm=dtm_src,
                     resolution=cell_size, epsg_code=epsg, nodata=0, results_folder=Path(rdir),

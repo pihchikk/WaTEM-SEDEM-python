@@ -152,10 +152,63 @@ defaults:
   Pfactor:      1          # dimensionless
   Rfactor:      350.0      # MJ·mm·ha⁻¹·h⁻¹·yr⁻¹
   bulk-density: 1300.0     # kg·m⁻³
-  ktc:          1          # dimensionless
+  ktc:          250        # metres (overridden by calibration.ktc_low/high)
+
+# Tillage erosion (the "T" in WaTEM). Off by default -- the reference rasters
+# under tests/ and in docs/REFERENCE_RUN_SETTINGS.md are water erosion only, so
+# turning this on makes runs incomparable with them. ktil is kg m-1; 600 is the
+# desktop software's default and the value its reference runs used.
+tillage:
+  enabled: false
+  ktil: 600
 
 calibration:
-  ktc_multiplier: 25
+  # Transport-capacity coefficients, in METRES. ktc_limit is a threshold on the
+  # C factor, not a coefficient: cells with C below it use ktc_low, the rest
+  # ktc_high. These are the WaTEM/SEDEM desktop defaults.
+  ktc_low:   75
+  ktc_high:  250
+  ktc_limit: 0.1
+
+# Sediment routing scheme.
+#   d8:  a cell's whole outflow goes to one neighbour (SAGA's D8 grid).
+#   mfd: outflow is split across all downslope neighbours, weighted by
+#        gradient**mfd_exponent, and the upslope area feeding the LS factor is
+#        routed the same way. This is what the original WaTEM/SEDEM software
+#        does. Measured against its output on the lom and spok reference
+#        catchments, mfd raises top-decile erosion IoU from 0.478/0.556 to
+#        0.744/0.730 and Spearman rho from 0.818/0.874 to 0.895/0.932
+#        The modeller who produced those references confirmed the desktop
+#        software spreads flow over several directions, so mfd is the default.
+routing_scheme: desmet_govers
+mfd_exponent: 1.0
+
+# LS-factor formulation. One of: wischmeier, mccool, govers, nearing,
+# pascal_vanoost2003, pascal_mccool1987, pascal_nearing1997.
+ls_method: pascal_mccool1987
+
+# EPOCH COUPLING (AquaCrop + LISEM → WaTEM-SEDEM)
+# See docs/COUPLING_VARS_LEDGER.md for the full division of labor and caveats.
+coupling_mode: static
+  # static: current stand-alone behavior — default scalar/raster Cfactor/Rfactor from
+  #         this file, unchanged. Use this for the baseline run in the comparison harness.
+  # epoch:  one update() per AquaCrop growing season; Cfactor/Rfactor are derived from
+  #         a coupled run's daily outputs via src/coupling_drivers.py.
+  # event:  one update() per rainfall event identified from the daily rain series;
+  #         lower priority, see disable_if_lisem_covers_event below.
+
+flow_direction_source: internal
+  # internal: WaTEM-SEDEM derives its own D8 grid from the DTM (current/default behavior).
+  # external: ingest a pre-computed flow-direction raster (e.g. LISEM's routed grid) via
+  #           external_flow_direction_path instead — required when both models cover the
+  #           same catchment so sediment routing agrees between them.
+external_flow_direction_path: null   # path to raster; required if flow_direction_source: external
+
+# event-mode only: when true, update() logs a warning and skips the erosion solve for any
+# day/window already covered by an active LISEM event run, instead of double-counting the
+# same storm. Seasonal-epoch mode is inherently non-overlapping with LISEM's per-storm
+# accounting, so this flag has no effect there.
+disable_if_lisem_covers_event: true
 
 # 4. DTM COVARIATES (which layers can be derived from the DTM)
 dtm_covariates:

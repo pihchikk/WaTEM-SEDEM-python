@@ -12,8 +12,33 @@ import numpy as np
 import rasterio
 from affine import Affine
 
-from pywatemsedem.defaults import SAGA_FLAGS
-from pywatemsedem.geo.utils import load_raster, clean_up_tempfiles
+# pywatemsedem imported lazily: it raises OSError at import time without SAGA
+# GIS, and everything it provides here is only used by the SAGA-backed
+# DTM-derivation helpers. `external` mode reads pre-computed rasters instead
+# and must not require SAGA at all.
+#
+# Every function below that touches these names must call _ensure_pyws() first.
+# A module-level __getattr__ (PEP 562) is NOT enough on its own: it fires only
+# for attribute access on the module object, not for a bare global-name lookup
+# from a function defined in this same module, so `SAGA_FLAGS` inside
+# _run_saga() would raise NameError until something else had populated it.
+def _ensure_pyws():
+    if 'SAGA_FLAGS' in globals():
+        return
+    from pywatemsedem.defaults import SAGA_FLAGS
+    from pywatemsedem.geo.utils import clean_up_tempfiles, load_raster
+    globals().update(
+        SAGA_FLAGS=SAGA_FLAGS,
+        load_raster=load_raster,
+        clean_up_tempfiles=clean_up_tempfiles,
+    )
+
+
+def __getattr__(name):
+    if name in ('SAGA_FLAGS', 'load_raster', 'clean_up_tempfiles'):
+        _ensure_pyws()
+        return globals()[name]
+    raise AttributeError(name)
 
 import logging
 logger = logging.getLogger(__name__)
@@ -29,6 +54,7 @@ def safe_dem(elevation: np.ndarray, mask: np.ndarray, nodata: float = _NODATA) -
 
 def _run_saga(module: str, tool: str, args: list[str]) -> None:
     """Invoke saga_cmd with module/tool and args."""
+    _ensure_pyws()
     flags = [SAGA_FLAGS] if isinstance(SAGA_FLAGS, str) else list(SAGA_FLAGS)
     cmd = ["saga_cmd", *flags, module, tool, *args]
     logger.debug("SAGA: %s", " ".join(cmd))
@@ -66,6 +92,7 @@ def _write_temp_dem(arr: np.ndarray,
 
 def _read_and_clean(path_root: str, force_dtype: Optional[str] = None) -> np.ndarray:
     """Read SAGA .sdat by root; replace nodata with NaN; cast if requested."""
+    _ensure_pyws()
     arr, rp = load_raster(path_root + ".sdat")
     nodata = rp.get("nodata", None)
     if nodata is not None:
@@ -118,12 +145,17 @@ def compute_flow_accumulation(elevation: np.ndarray, cell_size: float) -> np.nda
 def compute_flow_direction(elevation: np.ndarray, cell_size: float) -> np.ndarray:
     """
     D8 flow direction via SAGA 'Channel Network and Drainage Basins' (ta_channels, tool 5).
-    Output int16: 1–8 for directions, -1 for nodata/no-flow.
+    Output int16: 0-7 for directions (0 = N, then clockwise), -1 for nodata/no-flow.
+
+    SAGA's DIRECTION grid is 0-7 with 255 for nodata -- verified against the raw
+    .sdat, not assumed. That is already the convention compute_erosion()'s dr/dc
+    tables index by, so codes pass through unchanged.
     """
     dem_tif = _write_temp_dem(elevation, cell_size)
     dem_path = Path(dem_tif)
     out_root = dem_path.with_name(dem_path.stem + "_flowdir")
     arr: np.ndarray
+    _ensure_pyws()
 
     try:
         cmd = [
@@ -140,8 +172,12 @@ def compute_flow_direction(elevation: np.ndarray, cell_size: float) -> np.ndarra
         mask = np.isfinite(elevation)
         arr = np.where(mask, arr, -1).astype(np.int16, copy=False)
 
-        # sanitize: valid D8 codes 1..8 only; else -1
-        bad = (arr < 1) | (arr > 8)
+        # sanitize: valid D8 codes 0..7 only; else -1 (SAGA writes 255 for nodata).
+        # This used to read (arr < 1) | (arr > 8), which discarded every cell
+        # draining due north (code 0) -- ~6% of the catchment on the lom
+        # reference dataset -- turning each into an artificial sink that
+        # swallowed all sediment routed into it.
+        bad = (arr < 0) | (arr > 7)
         arr[bad] = -1
 
     except subprocess.CalledProcessError as e:
@@ -157,18 +193,21 @@ def compute_flow_direction(elevation: np.ndarray, cell_size: float) -> np.ndarra
 
 
 def compute_slope_length(elevation: np.ndarray, cell_size: float) -> np.ndarray:
-    """
-    Approximate slope length via SAGA ta_channels tool 1. If SAGA fails,
-    fallback to sqrt(flow_accumulation * cell_size).
+    """Slope length (m) via SAGA ta_hydrology tool 7.
+
+    This used to call ta_channels tool 1, which is "Watershed Basins" and has
+    neither a -SLOPE_LENGTH output nor a -THRESHOLD argument, so the call failed
+    on every run and silently fell through to the sqrt(fac * cell_size)
+    approximation below. Nothing noticed because the LS methods in use do not
+    read slope_length -- but any method that does would have been fed the
+    fallback without a word.
     """
     dem_tif = _write_temp_dem(elevation, cell_size)
     out_root = dem_tif.replace(".tif", "_sl")
 
     try:
-        _run_saga("ta_channels", "1",
-                  ["-DEM", dem_tif, "-SLOPE_LENGTH", out_root, "-THRESHOLD", "1"])
-        arr = _read_and_clean(out_root, force_dtype="float32")
-        return arr
+        _run_saga("ta_hydrology", "7", ["-DEM", dem_tif, "-LENGTH", out_root])
+        return _read_and_clean(out_root, force_dtype="float32")
 
     except subprocess.CalledProcessError:
         logger.warning("SAGA slope-length failed; using sqrt(fac*cell_size) fallback")

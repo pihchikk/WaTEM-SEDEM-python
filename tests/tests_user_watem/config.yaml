@@ -1,0 +1,106 @@
+version: 1.0
+mode: user_watem
+scenario_year: 2025
+scenario_nr: 1
+raster_dir: ./data/rasters
+segment_tables_dir: ./data/segments
+raw_input_dir: ./data/pywatemsedem_input
+raw_inputs:
+  elevation: elevation.tif
+  catchment: catchment.shp
+  landuse: landuse.tif
+  Kfactor: Kfactor.tif
+  river: river.shp
+  water: water.shp
+  infrastructure: infrastructure.shp
+catchment_name: sample_catchment
+pyws_output_dir: ./pywatemsedem_preprocessed_rasters
+dtm_resolution: 20
+dtm_epsg: 32637
+dtm_nodata: -9999
+extensions:
+- .tif
+- .tiff
+- .rst
+- .nc
+layers:
+  elevation:
+    required: true
+    source: external
+  Rfactor:
+    required: false
+    source: auto
+  bulk-density:
+    required: false
+    source: external
+  Kfactor:
+    required: true
+    source: auto
+  Cfactor:
+    required: false
+    source: auto
+  Pfactor:
+    required: false
+    source: auto
+  ktc:
+    required: false
+    source: auto
+  slope:
+    required: true
+    source: auto
+  flow_accumulation:
+    required: true
+    source: auto
+  aspect:
+    required: true
+    source: auto
+  slope_length:
+    required: true
+    source: auto
+  flow_direction:
+    required: true
+    source: auto
+  routing:
+    required: false
+    source: external
+  segments:
+    required: false
+    source: external
+  outlet:
+    required: false
+    source: external
+  LS-factor:
+    required: true
+    source: auto
+defaults:
+  Cfactor: 0.37
+  Kfactor: 70
+  Pfactor: 1
+  Rfactor: 350.0
+  bulk-density: 1300.0
+  ktc: 250
+calibration:
+  ktc_low: 75
+  ktc_high: 250
+  ktc_limit: 0.1
+routing_scheme: desmet_govers
+mfd_exponent: 1.0
+ls_method: pascal_mccool1987
+coupling_mode: static
+flow_direction_source: internal
+external_flow_direction_path: null
+disable_if_lisem_covers_event: true
+dtm_covariates:
+  slope: true
+  aspect: true
+  flow_accumulation: true
+  slope_length: true
+  flow_direction: true
+  LS-factor: true
+output:
+  directory: ./results
+  format: tif
+  sediment_unit: kg
+  erosion_unit: kg
+  save_rasters: true
+  save_plots: true

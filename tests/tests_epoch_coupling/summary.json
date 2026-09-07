@@ -1,0 +1,72 @@
+{
+  "config": "config.yaml",
+  "coupling_mode_A": "static",
+  "coupling_mode_B": "epoch",
+  "driver_series_source": "synthetic",
+  "rfactor_source": "derived_daily_depth (Renard & Freimund 1994 approximation \u2014 see docs/COUPLING_VARS_LEDGER.md \u00a73)",
+  "drivers": {
+    "A_cfactor": 0.37,
+    "A_rfactor": 350.0,
+    "B_cfactor": 0.5521333581650371,
+    "B_rfactor": 69.49391515713113
+  },
+  "scalar_summary": {
+    "total_erosion": {
+      "A_baseline": 816893.375,
+      "B_coupled": 367543.78125,
+      "pct_change": -55.007129143384226
+    },
+    "total_deposition": {
+      "A_baseline": 562845.75,
+      "B_coupled": 210607.90625,
+      "pct_change": -62.581594291153486
+    },
+    "mean_sedi_out": {
+      "A_baseline": 759.8761596679688,
+      "B_coupled": 264.5538024902344,
+      "pct_change": -65.18461605561723
+    },
+    "median_sedi_out": {
+      "A_baseline": 108.19816589355469,
+      "B_coupled": 67.33091735839844,
+      "pct_change": -37.770740564457846
+    },
+    "sediment_delivery_ratio": {
+      "A_baseline": 0.3109923923669965,
+      "B_coupled": 0.42698552663921585,
+      "pct_change": 37.297740111706
+    },
+    "erosion_unit": {
+      "A_baseline": "kg cell-1",
+      "B_coupled": "kg cell-1"
+    },
+    "sediment_unit": {
+      "A_baseline": "kg cell-1",
+      "B_coupled": "kg cell-1"
+    }
+  },
+  "spearman_correlation_watereros": 0.6163572903002235,
+  "spatial_diff_rasters": [
+    "tests/tests_epoch_coupling/WATEREROS_diff.tif",
+    "tests/tests_epoch_coupling/CAPACITY_diff.tif"
+  ],
+  "sensitivity_breakdown": {
+    "cfactor_only": {
+      "description": "Coupled Cfactor, baseline (static) Rfactor",
+      "total_erosion": 1851102.125,
+      "pct_change_from_baseline": 126.6026609653922,
+      "share_of_total_coupled_change": -2.3015682319174235
+    },
+    "rfactor_only": {
+      "description": "Coupled Rfactor, baseline (static) Cfactor",
+      "total_erosion": 246301.375,
+      "pct_change_from_baseline": -69.849017933338,
+      "share_of_total_coupled_change": 1.2698175494901067
+    },
+    "flow_topology_only": {
+      "description": "Reruns (B) with A's flow topology instead of a reused/external one. Both arms in this harness use WaTEM-SEDEM's own internal D8 derivation (flow_direction_source=internal in config.yaml), so there is no topology difference to attribute here; set flow_direction_source=external with external_flow_direction_path to exercise this component.",
+      "skipped": true
+    }
+  },
+  "maps_png": "tests/tests_epoch_coupling/maps.png"
+}
