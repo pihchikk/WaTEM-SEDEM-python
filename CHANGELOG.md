@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.2.1
+
+Two BMI fixes that were written and merged to `main` after the 0.2.0 tag was
+already cut, so 0.2.0 never actually shipped them:
+
+- **`ktc` was inert through the BMI.** `solver.solve()` always overwrote
+  `data["ktc"]` from `Cfactor` via `select_ktc()`, discarding anything a
+  caller had pushed through `set_value('ktc', ...)`. Now gated on whether
+  `set_value()`/`set_value_at_indices()` was ever called for `ktc`; the CLI
+  path (which never touches it) is unaffected. `get_var_units('ktc')` also
+  corrected from `"-"` to `"m"` -- it is a length, not dimensionless.
+- **`bulk-density` crashed `set_value()`, and once fixed to accept a
+  grid-shaped array, crashed the `d8` routing scheme instead.** It advertised
+  the full grid size via `get_var_grid()`/`get_grid_size()` but was stored as
+  a single-element array, so `set_value('bulk-density', <grid array>)` --
+  exactly what bmi-runner sends -- raised a reshape `ValueError`. Fixed by
+  broadcasting it to the full grid in `initialize()`, same as `Rfactor`, and
+  collapsing it back to a representative scalar in `update()` before the
+  solve: `bulk_density` is used as one unindexed float per cell in the `d8`
+  router (`lateraldistribution.compute_cell`), so a raw grid array reaching it
+  made `if total_in > cap_m3:` ambiguous on a multi-element array. The default
+  `desmet_govers`/`holmgren` routing never hit this -- `bulk_density` there
+  only ever appears in elementwise array ops, which tolerate scalar or array
+  alike.
+
 ## 0.2.0
 
 Distribution renamed to **`bmi-WaTEM-SEDEM`** (was `watem-sedem-bmi`), matching
